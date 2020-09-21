@@ -2,6 +2,7 @@
 #pip install openpyxl
 import pandas as pd
 import datetime
+import numpy as np
 
 FILE_DIR = "E:\\code\\diaz-project\\resources"
 FILE_NAME = "mybook.xlsx"
@@ -104,17 +105,26 @@ def task2_and_3(file_path, input_sheet_name, output_sheet_name):
             zero_count = 0
 
     #time_for_single_zero = float(total_sec_assigned_to_consecutive_zero) / total_consecutive_zero
-    import numpy as np
     for key, value in consecutive_zero_dict.items():
         #print("Event = %r Count = %r CUMUL_TIME = %r" % (key, value[0], value[1]))
         df[TIME_DIFF_SEC_COLUMN] = np.where((df[TIME_DIFF_SEC_COLUMN] == 0.0) & (df[EVENT_CONTEXT_COLUMN] == key), value[1]/value[0], df[TIME_DIFF_SEC_COLUMN])
     #print(df[[TIME_DIFF_SEC_COLUMN]].head(19))
     write_df_to_excel(file_path, df, output_sheet_name)
     print("task 2-3 done...")
+
+#drop the first row of each students consecutive data. (Except the first row in the excel)
+#ques: first row in the excel?
+def task4(file_path, input_sheet_name, output_sheet_name):
+    USER_FULL_NAME_COLUMN = 'User full name'
+    df = pd.read_excel(file_path, sheet_name=input_sheet_name)
+    df.drop(df[(df[USER_FULL_NAME_COLUMN] != df[USER_FULL_NAME_COLUMN].shift(1)) & \
+        (df[USER_FULL_NAME_COLUMN].shift(1).apply(lambda x : isinstance(x,str)))].index, inplace = True)
+    write_df_to_excel(file_path, df, output_sheet_name)
+    print("task4 done...")
+
 if __name__ == "__main__":
     #task1(FILE_PATH, input_sheet_name='Sheet1', output_sheet_name='Task1')
-    task2_and_3(FILE_PATH, input_sheet_name='Task1', output_sheet_name = 'Task2-3')
-
-    
+    #task2_and_3(FILE_PATH, input_sheet_name='Task1', output_sheet_name = 'Task2-3')
+    task4(FILE_PATH, input_sheet_name='Task2-3', output_sheet_name='Task4')
     
 
