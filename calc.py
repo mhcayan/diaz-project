@@ -4,6 +4,8 @@ import pandas as pd
 import datetime
 import numpy as np
 
+#todo: merge the constants in an Enum class
+
 FILE_DIR = "E:\\code\\diaz-project\\resources"
 FILE_NAME = "mybook.xlsx"
 FILE_PATH = FILE_DIR + "\\" + FILE_NAME
@@ -26,12 +28,12 @@ xlApp.Quit()
 '''
 from openpyxl import load_workbook
 
-def write_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet'):
+def write_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet', index_bool = False):
     book = load_workbook(file_path)
     writer = pd.ExcelWriter(file_path, engine='openpyxl') # pylint: disable=abstract-class-instantiated
     writer.book = book
     writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
-    df.to_excel(writer, sheet_name = sheet_name, index = False)
+    df.to_excel(writer, sheet_name = sheet_name, index = index_bool)
     writer.save()
     writer.close()
 
@@ -122,9 +124,24 @@ def task4(file_path, input_sheet_name, output_sheet_name):
     write_df_to_excel(file_path, df, output_sheet_name)
     print("task4 done...")
 
+def task5(file_path, input_sheet_name, output_sheet_name):
+    df = pd.read_excel(file_path, sheet_name=input_sheet_name)
+    EVENT_CONTEXT_COLUMN = 'Event context'
+    TIME_DIFF_SEC_COLUMN = 'TIME DIFF SEC'
+    event_dict = dict()
+    for event_name in sorted(df[EVENT_CONTEXT_COLUMN].unique()):
+        event_dict[event_name] = df[df[EVENT_CONTEXT_COLUMN] == event_name][TIME_DIFF_SEC_COLUMN].describe()
+    stat_df = pd.DataFrame.from_dict(event_dict, orient = 'index')
+    stat_df = stat_df.rename_axis(None)
+    stat_df.index.names = ['']
+    write_df_to_excel(file_path, stat_df, input_sheet_name + "-stat", index_bool=True)
+    print(stat_df.head())
+    print("task 5 done")
+
 if __name__ == "__main__":
     #task1(FILE_PATH, input_sheet_name='Sheet1', output_sheet_name='Task1')
     #task2_and_3(FILE_PATH, input_sheet_name='Task1', output_sheet_name = 'Task2-3')
-    task4(FILE_PATH, input_sheet_name='Task2-3', output_sheet_name='Task4')
+    #task4(FILE_PATH, input_sheet_name='Task2-3', output_sheet_name='Task4')
+    task5(FILE_PATH, input_sheet_name='Task4', output_sheet_name=None)
     
 
