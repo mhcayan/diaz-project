@@ -27,39 +27,78 @@ def apped_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet'):
     with pd.ExcelWriter(file_path, mode = 'a') as writer: # pylint: disable=abstract-class-instantiated
         df.to_excel(writer, sheet_name = sheet_name, index = False)
 
-df = pd.read_excel(FILE_PATH, sheet_name = 'Sheet1')
-print(df.head())
+TIME_DIFF_SEC_COLUMN = 'TIME DIFF SEC'
 
-previous_event_context = None
-end_time_index = None
-start_time_index = None
-DATE_TIME_FORMAT = '%m/%d/%y %H:%M:%S'
-DATE_TIME_COLUMN = 'Date/Time'
-TIME_DIFF_COLUMN = 'TIME DIFF'
-TIME_DIFF_COLUMN_INDEX = 4
-ll = []
+def task1():
+    df = pd.read_excel(FILE_PATH, sheet_name = 'Sheet1')
+    print(df.head())
 
-for index, row in df.iterrows():
-    if(row['Event context'] != previous_event_context):
-        if(start_time_index != None) :
-            start_time = datetime.datetime.strptime(df.at[start_time_index, DATE_TIME_COLUMN], DATE_TIME_FORMAT)
-            end_time = datetime.datetime.strptime(df.at[end_time_index, DATE_TIME_COLUMN], DATE_TIME_FORMAT)
-            #print("end_time_index = %r start_time_index = %r " % (end_time_index, start_time_index))
-            #print("end_time = %r start_time = %r" % (end_time, start_time))
-            diff_time = end_time - start_time
-            active_row = df.iloc[start_time_index]
-            active_row_as_list = active_row.values.tolist()
-            active_row_as_list[TIME_DIFF_COLUMN_INDEX] = diff_time.seconds
-            #print(active_row_as_list)
-            ll.append(active_row_as_list)
-            #print(diff_time.seconds)
-        end_time_index = index
-    start_time_index = index
-    previous_event_context = row['Event context']
+    previous_event_context = None
+    end_time_index = None
+    start_time_index = None
+    DATE_TIME_FORMAT = '%m/%d/%y %H:%M:%S'
+    DATE_TIME_COLUMN = 'Date/Time'
+    
+    TIME_DIFF_COLUMN_INDEX = 4
+    ll = []
 
-df1 = pd.DataFrame(ll, columns = df.columns)
-apped_df_to_excel(df = df1, sheet_name = 'task1')
+    #todo: replace iterrow with faster alternative
+    for index, row in df.iterrows():
+        if(row['Event context'] != previous_event_context):
+            if(start_time_index != None) :
+                start_time = datetime.datetime.strptime(df.at[start_time_index, DATE_TIME_COLUMN], DATE_TIME_FORMAT)
+                end_time = datetime.datetime.strptime(df.at[end_time_index, DATE_TIME_COLUMN], DATE_TIME_FORMAT)
+                #print("end_time_index = %r start_time_index = %r " % (end_time_index, start_time_index))
+                #print("end_time = %r start_time = %r" % (end_time, start_time))
+                diff_time = end_time - start_time
+                active_row = df.iloc[start_time_index]
+                active_row_as_list = active_row.values.tolist()
+                active_row_as_list[TIME_DIFF_COLUMN_INDEX] = diff_time.seconds
+                #print(active_row_as_list)
+                ll.append(active_row_as_list)
+                #print(diff_time.seconds)
+            end_time_index = index
+        start_time_index = index
+        previous_event_context = row['Event context']
 
-print("step 1 done...")
+    df1 = pd.DataFrame(ll, columns = df.columns)
+    apped_df_to_excel(df = df1, sheet_name = 'task1')
+
+    print("step 1 done...")
+
+def task2_and_3():
+    df = pd.read_excel(FILE_PATH, sheet_name='task1')
+    zero_count = 0
+    total_consecutive_zero = 0
+    total_sec_assigned_to_consecutive_zero = 0
+    df[TIME_DIFF_SEC_COLUMN] = df[TIME_DIFF_SEC_COLUMN].astype(float)
+    for index in df.index:
+        if df.at[index, TIME_DIFF_SEC_COLUMN] == 0:
+            zero_count = zero_count + 1
+        else:
+            if zero_count > 1:
+                start_index = index - zero_count
+                end_index = index - 1
+                #print("start_index = %r end_index = %r" % (start_index, end_index))                
+                time_value = 60.0 / zero_count
+                total_consecutive_zero = total_consecutive_zero + zero_count
+                total_sec_assigned_to_consecutive_zero = total_sec_assigned_to_consecutive_zero + 60
+                print(time_value)
+                for i in range(start_index, index):
+                    df.at[i, TIME_DIFF_SEC_COLUMN] = time_value
+            zero_count = 0
+
+    time_for_single_zero = float(total_sec_assigned_to_consecutive_zero) / total_consecutive_zero
+    import numpy as np
+    df[TIME_DIFF_SEC_COLUMN] = np.where(df[TIME_DIFF_SEC_COLUMN] == 0, time_for_single_zero, df[TIME_DIFF_SEC_COLUMN])
+    print(df[[TIME_DIFF_SEC_COLUMN]].head(19))
+
+if __name__ == "__main__":
+    #task1()
+    task2_and_3()
 
 
+
+
+    
+    
