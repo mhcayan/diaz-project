@@ -23,14 +23,21 @@ xlwb.Save()
 xlwb.Close()
 xlApp.Quit()
 '''
-def apped_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet'):
-    with pd.ExcelWriter(file_path, mode = 'a') as writer: # pylint: disable=abstract-class-instantiated
-        df.to_excel(writer, sheet_name = sheet_name, index = False)
+from openpyxl import load_workbook
+
+def write_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet'):
+    book = load_workbook(file_path)
+    writer = pd.ExcelWriter(file_path, engine='openpyxl') # pylint: disable=abstract-class-instantiated
+    writer.book = book
+    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
+    df.to_excel(writer, sheet_name = sheet_name, index = False)
+    writer.save()
+    writer.close()
 
 TIME_DIFF_SEC_COLUMN = 'TIME DIFF SEC'
 
-def task1():
-    df = pd.read_excel(FILE_PATH, sheet_name = 'Sheet1')
+def task1(file_path):
+    df = pd.read_excel(file_path, sheet_name = 'Sheet1')
     print(df.head())
 
     previous_event_context = None
@@ -62,7 +69,7 @@ def task1():
         previous_event_context = row['Event context']
 
     df1 = pd.DataFrame(ll, columns = df.columns)
-    apped_df_to_excel(df = df1, sheet_name = 'task1')
+    write_df_to_excel(file_path = file_path, df = df1, sheet_name = 'task1')
 
     print("step 1 done...")
 
@@ -94,8 +101,8 @@ def task2_and_3():
     print(df[[TIME_DIFF_SEC_COLUMN]].head(19))
 
 if __name__ == "__main__":
-    #task1()
-    task2_and_3()
+    task1(FILE_PATH)
+    #task2_and_3()
 
 
 
