@@ -48,7 +48,7 @@ def write_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet', in
     writer.close()
 
 def write_df_to_csv(file_path, df):
-    df.to_csv(file_path, encoding = 'utf-8')
+    df.to_csv(file_path, index = False, encoding = 'utf-8')
 
 def task1(file_path, input_sheet_name, output_file_path):
 
@@ -87,43 +87,57 @@ def task1(file_path, input_sheet_name, output_file_path):
     write_df_to_csv(file_path = output_file_path, df = df1)
     print("task 1 done...")
 
-def task2_and_3(file_path, input_sheet_name, output_sheet_name):
-    df = pd.read_excel(file_path, sheet_name=input_sheet_name)
+def task2(input_file_path, output_file_path):
+    df = pd.read_csv(input_file_path)
     zero_count = 0
-    consecutive_zero_dict = dict()
+    consecutive_zero_event_dict = dict()
     #total_consecutive_zero = 0
     #total_sec_assigned_to_consecutive_zero = 0
-    df[ExcelColumnName.TIME_DIFF_SEC.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].astype(float)
-    EVENT_CONTEXT_COLUMN = 'Event context'
+    df[ExcelColumnName.TIME_DIFF_SEC.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].astype(float) #change datatype of column TIME_DIFF_SEC
     for index in df.index:
-        if df.at[index, TIME_DIFF_SEC_COLUMN] == 0:
+        
+        if df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] == 0 and \
+            (zero_count == 0 or \
+                (df.at[index-1, ExcelColumnName.TIME_DIFF_SEC.value] == 0 and df.at[index, ExcelColumnName.DATE_TIME.value] == df.at[index - 1, ExcelColumnName.DATE_TIME.value])):
             zero_count = zero_count + 1
         else:
             if zero_count > 1:
                 start_index = index - zero_count
                 end_index = index - 1
                 #print("start_index = %r end_index = %r" % (start_index, end_index))                
-                time_value = 60.0 / zero_count
+                time_value = 60.0 / zero_count #time to be assigned to the consecutive zero events
                 #total_consecutive_zero = total_consecutive_zero + zero_count
                 #total_sec_assigned_to_consecutive_zero = total_sec_assigned_to_consecutive_zero + 60
+
+                #assing all those consecutive zero events the calculated time value
                 for i in range(start_index, index):
                     df.at[i, ExcelColumnName.TIME_DIFF_SEC.value] = time_value
                     event_name = df.at[i, ExcelColumnName.EVENT_CONTEXT.value]
-                    if event_name in consecutive_zero_dict:
-                        data = consecutive_zero_dict.get(event_name)
+                    if event_name in consecutive_zero_event_dict:
+                        data = consecutive_zero_event_dict.get(event_name)
                         data[0] = data[0] + 1 #increment counter
                         data[1] = data[1] + time_value #update cumulative sum for that event
                     else:
-                        consecutive_zero_dict[event_name] = [1, time_value]
-            zero_count = 0
+                        consecutive_zero_event_dict[event_name] = [1, time_value]
+            if df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] == 0:
+                zero_count = 1
+            else:
+                zero_count = 0
+    write_df_to_csv(output_file_path, df)
+    print("task 2 done...")
+    return consecutive_zero_event_dict
 
+def task5(input_file_path, output_file_path):
+    df = pd.read_csv(input_file_path)
     #time_for_single_zero = float(total_sec_assigned_to_consecutive_zero) / total_consecutive_zero
     for key, value in consecutive_zero_dict.items():
         #print("Event = %r Count = %r CUMUL_TIME = %r" % (key, value[0], value[1]))
-        df[TIME_DIFF_SEC_COLUMN] = np.where((df[TIME_DIFF_SEC_COLUMN] == 0.0) & (df[EVENT_CONTEXT_COLUMN] == key), value[1]/value[0], df[TIME_DIFF_SEC_COLUMN])
+        df[ExcelColumnName.TIME_DIFF_SEC.value] = np.where((df[ExcelColumnName.TIME_DIFF_SEC.value] == 0.0) & (df[ExcelColumnName.EVENT_CONTEXT.value] == key), value[1]/value[0], df[ExcelColumnName.TIME_DIFF_SEC.value])
     #print(df[[TIME_DIFF_SEC_COLUMN]].head(19))
-    write_df_to_excel(file_path, df, output_sheet_name)
-    print("task 2-3 done...")
+    write_df_to_csv(output_file_path, df)
+    print('task 3 done..')
+    
+    
 
 #drop the first row of each students consecutive data. (Except the first row in the excel)
 #ques: first row in the excel?
@@ -165,7 +179,14 @@ def task5(file_path, input_sheet_name, output_sheet_name):
     print("task 5 done")
 
 if __name__ == "__main__":
-    task1(FILE_PATH, input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, 'Task1.csv'))
-    #task2_and_3(FILE_PATH, input_sheet_name='Task1', output_sheet_name = 'Task2-3')
-    #task4(FILE_PATH, input_sheet_name='Task2-3', output_sheet_name='Task4')
+
+    task1_output_file_name = 'Task1.csv'
+    task2_output_file_name = 'Task2.csv'
+    task3_output_file_name = 'Task3.csv'
+    task4_output_file_name = 'Task4.csv'
+    task5_output_file_name = 'Task5.csv'
+
+    task1(FILE_PATH, input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, task1_output_file_name))
+    consecutive_zero_dict = task2(os.path.join(OUTPUT_FILE_DIR, task1_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, task2_output_file_name))
+    #task3(os.path.join(OUTPUT_FILE_DIR, task2_output_file_name), os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), consecutive_zero_dict)
     #task5(FILE_PATH, input_sheet_name='Task4', output_sheet_name=None)
