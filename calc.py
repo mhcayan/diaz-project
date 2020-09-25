@@ -17,6 +17,7 @@ class ExcelColumnName(enum.Enum):
 class ExcelColumnIndex(enum.Enum):
     TIME_DIFF_SEC = 4
 
+DATE_TIME_FORMAT = '%m/%d/%y %H:%M:%S'
 FILE_DIR = r'E:\code\student-data-project\resources'
 OUTPUT_FILE_DIR = FILE_DIR
 FILE_NAME = 'mybook.xlsx'
@@ -50,6 +51,20 @@ def write_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet', in
 def write_df_to_csv(file_path, df):
     df.to_csv(file_path, index = False, encoding = 'utf-8')
 
+def compute_diff_time_sec(df, start_time_index, end_time_index, computed_row_list):
+    start_time = datetime.datetime.strptime(df.at[start_time_index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
+    if end_time_index > 0:
+        end_time = datetime.datetime.strptime(df.at[end_time_index - 1, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
+    else:
+        end_time = datetime.datetime.strptime(df.at[end_time_index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
+    #print("end_time_index = %r start_time_index = %r " % (end_time_index, start_time_index))
+    print("end_time = %r start_time = %r" % (end_time, start_time))
+    diff_time = end_time - start_time
+    active_row = df.iloc[start_time_index]
+    active_row_as_list = active_row.values.tolist()
+    active_row_as_list[ExcelColumnIndex.TIME_DIFF_SEC.value] = diff_time.seconds
+    computed_row_list.append(active_row_as_list)
+
 def task1(file_path, input_sheet_name, output_file_path):
 
     df = pd.read_excel(file_path, sheet_name = input_sheet_name)
@@ -59,30 +74,17 @@ def task1(file_path, input_sheet_name, output_file_path):
     previous_event_context = None
     end_time_index = None
     start_time_index = None
-    DATE_TIME_FORMAT = '%m/%d/%y %H:%M:%S'
-    
-    ll = []
-
+    computed_row_list = []
     for index in df.index:
         if(df.at[index,ExcelColumnName.EVENT_CONTEXT.value] != previous_event_context):
             if(start_time_index != None) :
-                start_time = datetime.datetime.strptime(df.at[start_time_index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
-                end_time = datetime.datetime.strptime(df.at[end_time_index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
-                #print("end_time_index = %r start_time_index = %r " % (end_time_index, start_time_index))
-                #print("end_time = %r start_time = %r" % (end_time, start_time))
-                if((start_time_index != end_time_index and start_time == end_time) and end_time_index - 1 >= 0): # consecutive events with same timestamp and next event exists
-                    end_time = datetime.datetime.strptime(df.at[end_time_index - 1, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT) # end_time = next_event's start_time
-
-                diff_time = end_time - start_time
-                active_row = df.iloc[start_time_index]
-                active_row_as_list = active_row.values.tolist()
-                active_row_as_list[ExcelColumnIndex.TIME_DIFF_SEC.value] = diff_time.seconds
-                ll.append(active_row_as_list)
+                compute_diff_time_sec(df, start_time_index, end_time_index, computed_row_list)
             end_time_index = index
         start_time_index = index
         previous_event_context = df.at[index, ExcelColumnName.EVENT_CONTEXT.value]
 
-    df1 = pd.DataFrame(ll, columns = df.columns)
+    compute_diff_time_sec(df, start_time_index, end_time_index, computed_row_list)
+    df1 = pd.DataFrame(computed_row_list, columns = df.columns)
     #write_df_to_excel(file_path = file_path, df = df1, sheet_name = output_sheet_name)
     write_df_to_csv(file_path = output_file_path, df = df1)
     print("task 1 done...")
@@ -130,7 +132,7 @@ def task2(input_file_path, output_file_path):
 def task3(input_file_path, output_file_path, consecutive_zero_event_dict):
     df = pd.read_csv(input_file_path)
     #time_for_single_zero = float(total_sec_assigned_to_consecutive_zero) / total_consecutive_zero
-    for key, value in consecutive_zero_dict.items():
+    for key, value in consecutive_zero_event_dict.items():
         #print("event = %40s freq = %3d sum = %3.5f" % (key[:min(30, len(key))], value[0], value[1]))
         df[ExcelColumnName.TIME_DIFF_SEC.value] = np.where((df[ExcelColumnName.TIME_DIFF_SEC.value] == 0.0) \
         & (df[ExcelColumnName.EVENT_CONTEXT.value] == key), value[1]/value[0], df[ExcelColumnName.TIME_DIFF_SEC.value])
@@ -141,11 +143,11 @@ def task3(input_file_path, output_file_path, consecutive_zero_event_dict):
 
 #drop the first row of each students consecutive data. (Except the first row in the excel)
 #ques: first row in the excel?
-def task4(file_path, input_sheet_name, output_sheet_name):
-    df = pd.read_excel(file_path, sheet_name=input_sheet_name)
+def task4(input_file_path, output_file_path):
+    df = pd.read_csv(input_file_path)
     df.drop(df[(df[ExcelColumnName.USER_FULL_NAME.value] != df[ExcelColumnName.USER_FULL_NAME.value].shift(1)) & \
         (df[ExcelColumnName.USER_FULL_NAME.value].shift(1).apply(lambda x : isinstance(x,str)))].index, inplace = True)
-    write_df_to_excel(file_path, df, output_sheet_name)
+    write_df_to_csv(output_file_path, df)
     print("task4 done...")
 
 def get_cut_off_points(df, event_name):
@@ -180,13 +182,14 @@ def task5(file_path, input_sheet_name, output_sheet_name):
 
 if __name__ == "__main__":
 
-    task1_output_file_name = 'Task1.csv'
+    task1_output_file_name = 'Task11.csv'
     task2_output_file_name = 'Task2.csv'
     task3_output_file_name = 'Task3.csv'
     task4_output_file_name = 'Task4.csv'
     task5_output_file_name = 'Task5.csv'
 
     task1(FILE_PATH, input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, task1_output_file_name))
-    consecutive_zero_dict = task2(os.path.join(OUTPUT_FILE_DIR, task1_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, task2_output_file_name))
-    task3(os.path.join(OUTPUT_FILE_DIR, task2_output_file_name), os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), consecutive_zero_dict)
+    #consecutive_zero_dict = task2(os.path.join(OUTPUT_FILE_DIR, task1_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, task2_output_file_name))
+    #task3(os.path.join(OUTPUT_FILE_DIR, task2_output_file_name), os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), consecutive_zero_dict)
+    #task4(os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), os.path.join(OUTPUT_FILE_DIR, task4_output_file_name))
     #task5(FILE_PATH, input_sheet_name='Task4', output_sheet_name=None)
