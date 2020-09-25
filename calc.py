@@ -109,7 +109,7 @@ def task2(input_file_path, output_file_path):
                 #total_consecutive_zero = total_consecutive_zero + zero_count
                 #total_sec_assigned_to_consecutive_zero = total_sec_assigned_to_consecutive_zero + 60
 
-                #assing all those consecutive zero events the calculated time value
+                #assign all those consecutive zero events the calculated time value
                 for i in range(start_index, index):
                     df.at[i, ExcelColumnName.TIME_DIFF_SEC.value] = time_value
                     event_name = df.at[i, ExcelColumnName.EVENT_CONTEXT.value]
@@ -127,13 +127,13 @@ def task2(input_file_path, output_file_path):
     print("task 2 done...")
     return consecutive_zero_event_dict
 
-def task5(input_file_path, output_file_path):
+def task3(input_file_path, output_file_path, consecutive_zero_event_dict):
     df = pd.read_csv(input_file_path)
     #time_for_single_zero = float(total_sec_assigned_to_consecutive_zero) / total_consecutive_zero
     for key, value in consecutive_zero_dict.items():
-        #print("Event = %r Count = %r CUMUL_TIME = %r" % (key, value[0], value[1]))
-        df[ExcelColumnName.TIME_DIFF_SEC.value] = np.where((df[ExcelColumnName.TIME_DIFF_SEC.value] == 0.0) & (df[ExcelColumnName.EVENT_CONTEXT.value] == key), value[1]/value[0], df[ExcelColumnName.TIME_DIFF_SEC.value])
-    #print(df[[TIME_DIFF_SEC_COLUMN]].head(19))
+        #print("event = %40s freq = %3d sum = %3.5f" % (key[:min(30, len(key))], value[0], value[1]))
+        df[ExcelColumnName.TIME_DIFF_SEC.value] = np.where((df[ExcelColumnName.TIME_DIFF_SEC.value] == 0.0) \
+        & (df[ExcelColumnName.EVENT_CONTEXT.value] == key), value[1]/value[0], df[ExcelColumnName.TIME_DIFF_SEC.value])
     write_df_to_csv(output_file_path, df)
     print('task 3 done..')
     
@@ -188,5 +188,5 @@ if __name__ == "__main__":
 
     task1(FILE_PATH, input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, task1_output_file_name))
     consecutive_zero_dict = task2(os.path.join(OUTPUT_FILE_DIR, task1_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, task2_output_file_name))
-    #task3(os.path.join(OUTPUT_FILE_DIR, task2_output_file_name), os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), consecutive_zero_dict)
+    task3(os.path.join(OUTPUT_FILE_DIR, task2_output_file_name), os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), consecutive_zero_dict)
     #task5(FILE_PATH, input_sheet_name='Task4', output_sheet_name=None)
