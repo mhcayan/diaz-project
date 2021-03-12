@@ -89,41 +89,39 @@ def task1(file_path, input_sheet_name, output_file_path):
     write_df_to_csv(file_path = output_file_path, df = df1)
     print("task 1 done...")
 
-#since: 3/9/2021
-def compute_diff_time_sec_new(df, start_time_index, end_time_index, computed_row_list):
+#since 3/12/2021
+def get_time_diff(df, start_time_index, end_time_index):
     start_time = datetime.datetime.strptime(df.at[start_time_index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
     end_time = datetime.datetime.strptime(df.at[end_time_index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
-    #print("end_time_index = %r start_time_index = %r " % (end_time_index, start_time_index))
-    #print("end_time = %r start_time = %r" % (end_time, start_time))
-    diff_time = end_time - start_time
+    return end_time - start_time
+
+#since: 3/9/2021
+def compute_diff_time_sec_new(df, start_time_index, end_time_index, computed_row_list):
+
     active_row = df.iloc[start_time_index]
     active_row_as_list = active_row.values.tolist()
-    active_row_as_list[ExcelColumnIndex.TIME_DIFF_SEC.value] = diff_time.seconds
+    active_row_as_list[ExcelColumnIndex.TIME_DIFF_SEC.value] = get_time_diff(df, start_time_index, end_time_index).seconds
     computed_row_list.append(active_row_as_list)
 
 
 #since: 3/9/2021
-#changes: completion time of an event = (start_time of next_event - start_time of current event)
+#last update: 3/12/2021
+#last changes: aggregation removed, each row is an event. time_diff_sec = start_time - start_time_of_next_event 
 def task1_new(file_path, input_sheet_name, output_file_path):
 
     df = pd.read_excel(file_path, sheet_name = input_sheet_name)
-    
+
     print(df.head(19))
 
-    previous_event_context = None
     end_time_index = None
     start_time_index = None
     computed_row_list = []
     for index in df.index:
-        if(df.at[index,ExcelColumnName.EVENT_CONTEXT.value] != previous_event_context):
-            if end_time_index != None:
-                compute_diff_time_sec_new(df, start_time_index, end_time_index, computed_row_list)
-            if index > 0:
-                end_time_index = index - 1
         start_time_index = index
-        previous_event_context = df.at[index, ExcelColumnName.EVENT_CONTEXT.value]
+        if end_time_index != None:
+            compute_diff_time_sec_new(df, start_time_index, end_time_index, computed_row_list)
+        end_time_index = start_time_index
 
-    compute_diff_time_sec(df, start_time_index, end_time_index, computed_row_list)
     df1 = pd.DataFrame(computed_row_list, columns = df.columns)
     #write_df_to_excel(file_path = file_path, df = df1, sheet_name = output_sheet_name)
     write_df_to_csv(file_path = output_file_path, df = df1)
