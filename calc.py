@@ -106,12 +106,12 @@ def compute_diff_time_sec_new(df, start_time_index, end_time_index, computed_row
 
 #since: 3/9/2021
 #last update: 3/12/2021
-#last changes: aggregation removed, each row is an event. time_diff_sec = start_time - start_time_of_next_event 
+#last changes: aggregation removed, each row is an event. time_diff_sec = start_time - start_time_of_next_event. Remove events with TIME_DIFF_SEC = 0
 def task1_new(file_path, input_sheet_name, output_file_path):
 
     df = pd.read_excel(file_path, sheet_name = input_sheet_name)
 
-    print(df.head(19))
+    print(df.head())
 
     end_time_index = None
     start_time_index = None
@@ -123,9 +123,11 @@ def task1_new(file_path, input_sheet_name, output_file_path):
         end_time_index = start_time_index
 
     df1 = pd.DataFrame(computed_row_list, columns = df.columns)
+    df1 = df1[df1[ExcelColumnName.TIME_DIFF_SEC.value] != 0]
     #write_df_to_excel(file_path = file_path, df = df1, sheet_name = output_sheet_name)
     write_df_to_csv(file_path = output_file_path, df = df1)
     print("task 1_new done...")
+
 
 def task2(input_file_path, output_file_path):
     df = pd.read_csv(input_file_path)
@@ -203,20 +205,16 @@ def task5(input_file_path, output_file_path):
     #stat_df = stat_df.rename_axis(None)
     #stat_df.index.names = ['']
     write_df_to_csv(output_file_path, stat_df, index = True)
-    print(len(df))
-    """
-    for event_name in event_list:
-        df[df[EVENT_CONTEXT_COLUMN] == event_name][TIME_DIFF_SEC_COLUMN].hist()
-        if cnt:
-            break
-    """
+    print("Task5 done...")
+"""
     for event_name in event_list:
         cut_off_points = get_cut_off_points(df, event_name)
         df.drop(df[(df[EVENT_CONTEXT_COLUMN] == event_name) & \
             ((df[TIME_DIFF_SEC_COLUMN] < cut_off_points[0]) | (df[TIME_DIFF_SEC_COLUMN] > cut_off_points[1]))].index, \
                 inplace = True)
     print(len(df))
-    print("task 5 done")
+"""
+
 
 if __name__ == "__main__":
 
@@ -230,4 +228,4 @@ if __name__ == "__main__":
     #consecutive_zero_dict = task2(os.path.join(OUTPUT_FILE_DIR, task1_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, task2_output_file_name))
     #task3(os.path.join(OUTPUT_FILE_DIR, task2_output_file_name), os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), consecutive_zero_dict)
     #task4(os.path.join(OUTPUT_FILE_DIR, task3_output_file_name), os.path.join(OUTPUT_FILE_DIR, task4_output_file_name))
-    #task5(os.path.join(OUTPUT_FILE_DIR, task1_output_file_name), os.path.join(OUTPUT_FILE_DIR, task5_output_file_name))
+    task5(os.path.join(OUTPUT_FILE_DIR, task1_output_file_name), os.path.join(OUTPUT_FILE_DIR, task5_output_file_name))
