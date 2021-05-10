@@ -29,6 +29,9 @@ THIRTY_MINUTES_IN_SEC = 30 * 60
 
 DEFAULT_EXAM_DURATION = THIRTY_MINUTES_IN_SEC
 
+SINGLE_EVENTS_PREFIX = '$single-event$ - '
+QUIZ_EVENTS_PREFIX = 'quiz'
+
 def write_df_to_excel(file_path = FILE_PATH, df = None, sheet_name = 'sheet', index_bool = False):
     book = load_workbook(file_path)
     writer = pd.ExcelWriter(file_path, engine='openpyxl') # pylint: disable=abstract-class-instantiated
@@ -122,26 +125,38 @@ def delete_zero_duration_event(input_file_path, output_file_path):
 def fix_negative_time(input_file_path, output_file_path):
 
     print("Task: fix negative time started..")
+    
     df = pd.read_csv(input_file_path)
-    for index in df.index:
-        if index > 0 and df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] < 0:
-            start_time = datetime.datetime.strptime(df.at[index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
-            end_time = datetime.datetime.strptime(df.at[index - 1, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
-            end_time = end_time.replace(year = end_time.year + 1) #assume the event was ended in the next year (increment end year)
-            df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] = int((end_time - start_time).total_seconds())
+    """
+    try:
+        for index in df.index:
+            if index > 0 and df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] < 0:
+                start_time = datetime.datetime.strptime(df.at[index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
+                end_time = datetime.datetime.strptime(df.at[index - 1, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
+                end_time = end_time.replace(year = end_time.year + 1) #assume the event was ended in the next year (increment end year)
+                df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] = int((end_time - start_time).total_seconds())
+    except:
+        print("index = %r start_time = %r end_time = %r\n" % (index, start_time, end_time))
+        raise
 
     df[ExcelColumnName.TIME_DIFF_HH_MM_SS.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].map(sec_to_hh_mm_ss)
+    """
+    df = df[df[ExcelColumnName.TIME_DIFF_SEC.value] > 0]
     write_df_to_csv(output_file_path, df = df)
     print("Task: fix negative time finished..")
     print("\n----------------------------------------\n")
-
+    
 #generate statistics(mean, median...) from each event
-def generate_statistics(input_file_path, output_file_path):
+def generate_statistics(input_file_path, output_file_path, remove_event_prefix = False):
 
     print("Task: generate statistics started..")
     df = pd.read_csv(input_file_path)
     EVENT_CONTEXT_COLUMN = ExcelColumnName.EVENT_CONTEXT.value
     TIME_DIFF_SEC_COLUMN = ExcelColumnName.TIME_DIFF_SEC.value
+
+    if remove_event_prefix:
+        df[EVENT_CONTEXT_COLUMN] = df[EVENT_CONTEXT_COLUMN].apply(lambda event_name : remove_prefix(event_name, SINGLE_EVENTS_PREFIX))
+
     event_list = sorted(df[EVENT_CONTEXT_COLUMN].unique())
     event_dict = dict()
     for event_name in event_list:
@@ -152,6 +167,9 @@ def generate_statistics(input_file_path, output_file_path):
     write_df_to_csv(output_file_path, stat_df, index = True)
     print("Task: generate statistics finished..")
     print("\n----------------------------------------\n")
+
+def remove_prefix(s, prefix):
+    return s[len(prefix):] if s.startswith(prefix) else s
 
 #private function used by "fix_long_events_duration" to fix 
 def update_duration(row, stat_df):
@@ -210,13 +228,57 @@ def aggregate_events(input_file_path, output_file_path):
     active_row_as_list = active_row.values.tolist()
     active_row_as_list[ExcelColumnIndex.TIME_DIFF_SEC.value] = cumulative_duration
     if event_count == 1:
-        active_row_as_list[ExcelColumnIndex.EVENT_CONTEXT.value] = '$single-event$ - ' + active_row_as_list[ExcelColumnIndex.EVENT_CONTEXT.value]
+        active_row_as_list[ExcelColumnIndex.EVENT_CONTEXT.value] = SINGLE_EVENTS_PREFIX + active_row_as_list[ExcelColumnIndex.EVENT_CONTEXT.value]
     computed_row_list.append(active_row_as_list)
     df = pd.DataFrame(computed_row_list, columns = df.columns)
     df[ExcelColumnName.TIME_DIFF_HH_MM_SS.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].map(sec_to_hh_mm_ss)
     write_df_to_csv(output_file_path, df)
     print("Task: aggregate events finished..")
     print("\n----------------------------------------\n")
+
+def delete_single_quiz_events(input_file_path, output_file_path):
+    df = pd.read_csv(input_file_path)
+    df = df[~df[ExcelColumnName.EVENT_CONTEXT.value].str.startswith(SINGLE_EVENTS_PREFIX + QUIZ_EVENTS_PREFIX)]
+    write_df_to_csv(output_file_path, df)
+
+#if there are multiple instances of same quiz events for a student, then keep the one with maximum duration
+def delete_duplicate_quiz_events(input_file_path, output_file_path):
+    df = pd.read_csv(input_file_path)
+    data_dict = dict()
+    for index in df.index:
+        event_name = df.iloc[index][ExcelColumnName.EVENT_CONTEXT.value]
+        if event_name.startswith(QUIZ_EVENTS_PREFIX):
+            event_duration = df.iloc[index][ExcelColumnName.TIME_DIFF_SEC.value]
+            user_name = df.iloc[index][ExcelColumnName.USER_FULL_NAME.value]
+            if user_name not in data_dict:
+                data_dict[user_name] = dict()
+            event_dict = data_dict[user_name]
+            max_duration = event_dict.get(event_name, None)
+            if not max_duration or max_duration < event_duration:
+                event_dict[event_name] = event_duration
+    print(data_dict)
+    
+    filtered_rows = []
+    for index in df.index:
+        event_name = df.iloc[index][ExcelColumnName.EVENT_CONTEXT.value]
+        if event_name.startswith(QUIZ_EVENTS_PREFIX): #if it's a quiz event
+            user_name = df.iloc[index][ExcelColumnName.USER_FULL_NAME.value]
+            user_event_dict = data_dict[user_name]
+            if event_name in user_event_dict:
+                max_duration = user_event_dict.get(event_name)
+                event_duration = df.iloc[index][ExcelColumnName.TIME_DIFF_SEC.value]
+                if event_duration == max_duration:
+                    filtered_rows.append(df.iloc[index].values.tolist())
+                    del user_event_dict[event_name]
+        else:
+            filtered_rows.append(df.iloc[index].values.tolist())
+    df = pd.DataFrame(filtered_rows, columns = df.columns)
+    write_df_to_csv(output_file_path, df)
+
+
+    
+
+
 
 #obsolete
 def task2(input_file_path, output_file_path):
@@ -273,17 +335,23 @@ def task3(input_file_path, output_file_path, consecutive_zero_event_dict):
 if __name__ == "__main__":
 
     event_duration_output_file_name = '1_event_duration.csv'
-    negative_time_fixed_file_name = "2_negative_time_fixed.csv"
-    students_last_event_deleted_file_name = '3_students_last_event_deleted.csv'
+    students_last_event_deleted_file_name = '2_students_last_event_deleted.csv'
+    negative_time_fixed_file_name = "3_negative_time_fixed.csv"
     zero_duration_event_deleted_file_name = "4_zero_duration_event_deleted.csv"
     statistics_output_file_name = '5_statistics.csv'
     long_events_duration_fixed_output_file_name = '6_long_events_duration_fixed.csv'
     aggregated_events_output_file_name = "7_aggregated_events.csv"
+    single_quiz_events_deleted_file_name = "8_single_quiz_events_deleted.csv"
+    duplicate_quiz_events_deleted_file_name = "9_duplicate_quiz_events_deleted.csv"
+    aggregated_events_statistics_file_name = "10_aggregated_events_statistics.csv"
 
-    compute_event_duration(FILE_PATH, input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
-    fix_negative_time(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
-    delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
-    delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
+    #compute_event_duration(FILE_PATH, input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
+    delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
+    fix_negative_time(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
+    delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
     generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
     fix_long_events_duration(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
     aggregate_events(os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name))
+    delete_single_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name), os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name))
+    delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
+    generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
