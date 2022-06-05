@@ -20,6 +20,12 @@ class ExcelColumnIndex(enum.Enum):
     TIME_DIFF_SEC = 4
     EVENT_CONTEXT = 9
 
+class ThresholdType(enum.Enum):
+    TEN_MINUTES = 0
+    THIRTY_MINUTES = 5
+    INTERQUARTILE_RANGE = 10
+    MODIFIED_Z_SCORE = 15 
+
 DATE_TIME_FORMAT = '%m/%d/%y %H:%M:%S'
 FILE_DIR = r'F:\E\code\student-data-project\resources'
 OUTPUT_FILE_DIR = FILE_DIR
@@ -198,6 +204,20 @@ def update_duration(row, stat_df, threshold):
             return stat_df.at[event_context, "50%"]
     return time_diff_sec
 
+#private function used by "fix_long_events_duration" to fix
+#only updates the duration of the single events 
+def update_single_events_duration(row, stat_df, threshold):
+
+    time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
+    is_single_event = row[ExcelColumnName.IS_SINGLE_EVENT.value]
+    if is_single_event and (time_diff_sec > threshold):
+        event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
+        if event_context.startswith('quiz: exam') or event_context.startswith('quiz: final exam'):
+            return DEFAULT_EXAM_DURATION
+        else:
+            return stat_df.at[event_context, "50%"]
+    return time_diff_sec
+
 def mark_single_events(input_file_path, output_file_path):
     
     print("Task: mark single events started..")
@@ -230,7 +250,25 @@ def fix_long_events_duration(input_file_path, output_file_path, stat_file_path, 
     df = pd.read_csv(input_file_path)
     stat_df = pd.read_csv(stat_file_path)
     stat_df.set_index('Unnamed: 0', inplace = True)
-    df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda  row : update_duration(row, stat_df, threshold=TEN_MINUTES_IN_SEC), axis = 1)
+
+    if by == ThresholdType.TEN_MINUTES:
+        if all_events:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration(row, stat_df, threshold=TEN_MINUTES_IN_SEC), axis = 1)
+        else:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_single_events_duration(row, stat_df, threshold=TEN_MINUTES_IN_SEC), axis = 1)
+    elif by == ThresholdType.THIRTY_MINUTES:
+        if all_events:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration(row, stat_df, threshold=THIRTY_MINUTES_IN_SEC), axis = 1)
+        else:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_single_events_duration(row, stat_df, threshold=THIRTY_MINUTES_IN_SEC), axis = 1)
+
+    elif by == ThresholdType.INTERQUARTILE_RANGE:
+        #df
+        print("lkdfj")
+    else:
+        #df
+        print("ldjf")
+
     df[ExcelColumnName.TIME_DIFF_HH_MM_SS.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].map(sec_to_hh_mm_ss)
     write_df_to_csv(output_file_path, df)
     print("Task: fix long events' duration finished..")
@@ -412,7 +450,7 @@ if __name__ == "__main__":
     #delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
     #generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
     #mark_single_events(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name))
-    #fix_long_events_duration(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
+    fix_long_events_duration(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), ThresholdType.TEN_MINUTES, all_events = False)
     #aggregate_events(os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name))
     #delete_single_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name), os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name))
     #delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
