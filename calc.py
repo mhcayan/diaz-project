@@ -15,6 +15,8 @@ class ExcelColumnName(enum.Enum):
     USER_FULL_NAME = 'User full name'
     EVENT_CONTEXT = 'Event Context'
     IS_SINGLE_EVENT = 'is_single_event'
+    MAD = 'MAD'
+    MEAN_AD = 'MeanAD'
 
 class ExcelColumnIndex(enum.Enum):
     TIME_DIFF_SEC = 4
@@ -246,11 +248,48 @@ def update_single_events_duration_by_interquartile_range(row, stat_df):
     else:
         return row[ExcelColumnName.TIME_DIFF_SEC.value]
 
+
+
 def update_duration_by_modified_z_score(row, stat_df):
     
     time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
     event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
+    mad = stat_df.at[event_context, ExcelColumnName.MAD.value]
+    meanAD = stat_df.at[event_context, ExcelColumnName.MEAN_AD.value]
 
+    #talk:
+    if mad == 0 and meanAD == 0:
+        return time_diff_sec
+
+    median = stat_df.at[event_context, '50%']
+    left_threshold = -3.5
+    right_threshold = 3.5
+    
+    #https://www.ibm.com/docs/en/cognos-analytics/11.1.0?topic=terms-modified-z-score
+    if mad == 0:
+        CONSTANT_FACTOR = 1.253314
+        modified_z_score = (time_diff_sec-median) / (CONSTANT_FACTOR * meanAD)
+        left_outlier_replacement_value = left_threshold * CONSTANT_FACTOR * meanAD + median
+        right_outlier_replacement_value = right_threshold * CONSTANT_FACTOR * meanAD + median
+    else:
+        CONSTANT_FACTOR = 1.486
+        modified_z_score = (time_diff_sec-median)/(CONSTANT_FACTOR * mad)
+        left_outlier_replacement_value = left_threshold * CONSTANT_FACTOR * mad + median
+        right_outlier_replacement_value = right_threshold * CONSTANT_FACTOR * mad + median
+    
+
+    return update_duration(row, left_threshold = left_threshold, 
+                                right_threshold = right_threshold, 
+                                left_outlier_replacement_val = left_outlier_replacement_value,
+                                right_outlier_replacement_val= right_outlier_replacement_value)
+
+
+def update_single_events_duration_by_modified_z_score(row, stat_df):
+    is_single_event = row[ExcelColumnName.IS_SINGLE_EVENT.value]
+    if is_single_event:
+        return update_duration_by_modified_z_score(row, stat_df)
+    else:
+        return row[ExcelColumnName.TIME_DIFF_SEC.value]
 
 def mark_single_events(input_file_path, output_file_path):
     
@@ -272,6 +311,15 @@ def mark_single_events(input_file_path, output_file_path):
                 count = count + 1
     write_df_to_csv(output_file_path, df)
     print("Task: mark single events started..")
+
+def compute_MAD(s):
+    median_s = s.median()
+    return (abs(s-median_s)).median()
+
+def compute_MeanAD(s):
+    median_s = s.median()
+    return (abs(s - median_s)).mean()
+
 
 #fix events' TIME_DIFF_SEC, when it's duration is more than 30 minutes. For events with prefix "quiz: exam" and "quiz: final exam" update duration to 30 minutes, 
 # for other events update their durtion with the median duration of that event
@@ -301,12 +349,19 @@ def fix_outliers(input_file_path, output_file_path, stat_file_path, by, all_even
             df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration_by_interquartile_range(row, stat_df), axis = 1)
         else:
             df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_single_events_duration_by_interquartile_range(row, stat_df), axis = 1)
+   
+    elif by == ThresholdType.MODIFIED_Z_SCORE:
+       #compute MAD for each event_context
+        stat_df['MAD'] = stat_df.apply(lambda row : compute_MAD(df[df[ExcelColumnName.EVENT_CONTEXT.value] == row.name][ExcelColumnName.TIME_DIFF_SEC.value]), axis = 1)
+        stat_df['MeanAD'] = stat_df.apply(lambda row : compute_MeanAD(df[df[ExcelColumnName.EVENT_CONTEXT.value] == row.name][ExcelColumnName.TIME_DIFF_SEC.value]), axis = 1)
+        write_df_to_csv(os.path.join(OUTPUT_FILE_DIR, 'updated_stat_df.csv'), stat_df)
+        if all_events:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration_by_modified_z_score(row, stat_df), axis = 1)
+        else:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_single_events_duration_by_modified_z_score(row, stat_df), axis = 1)
 
-            
-        
     else:
-        #df
-        print("ldjf")
+        raise Exception("Invalid value for param 'by'")
 
     df[ExcelColumnName.TIME_DIFF_HH_MM_SS.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].map(sec_to_hh_mm_ss)
     write_df_to_csv(output_file_path, df)
@@ -498,46 +553,56 @@ if __name__ == "__main__":
     #delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
     #generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
     #mark_single_events(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name))
-   
-    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_all_event_output_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
-                            ThresholdType.TEN_MINUTES, 
-                            all_events = True)
 
-    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_single_only_output_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
-                            ThresholdType.TEN_MINUTES, 
-                            all_events = False)
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_all_event_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.TEN_MINUTES, 
+    #                         all_events = True)
 
-    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_all_event_output_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
-                            ThresholdType.THIRTY_MINUTES, 
-                            all_events = True)
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_single_only_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.TEN_MINUTES, 
+    #                         all_events = False)
 
-    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_single_only_output_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
-                            ThresholdType.THIRTY_MINUTES, 
-                            all_events = False)
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_all_event_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.THIRTY_MINUTES, 
+    #                         all_events = True)
 
-    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_all_event_output_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
-                            ThresholdType.INTERQUARTILE_RANGE, 
-                            all_events = True)
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_single_only_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.THIRTY_MINUTES, 
+    #                         all_events = False)
 
-    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_single_only_output_file_name), 
-                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
-                            ThresholdType.INTERQUARTILE_RANGE, 
-                            all_events = False)
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_all_event_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.INTERQUARTILE_RANGE, 
+    #                         all_events = True)
 
-    
-    
-    #aggregate_events(os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name))
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_single_only_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.INTERQUARTILE_RANGE, 
+    #                         all_events = False)
+
+
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_modz_all_event_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.MODIFIED_Z_SCORE, 
+    #                         all_events = True)
+
+    # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_modz_single_only_output_file_name), 
+    #                         os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+    #                         ThresholdType.MODIFIED_Z_SCORE, 
+    #                         all_events = False)
+    #aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_all_event_output_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name))
     #delete_single_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name), os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name))
     #delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
     #generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
