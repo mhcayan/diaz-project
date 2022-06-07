@@ -32,7 +32,7 @@ OUTPUT_FILE_DIR = FILE_DIR
 FILE_NAME = 'test.xlsx'
 FILE_PATH = os.path.join(FILE_DIR, FILE_NAME)
 
-#THIRTY_MINUTES_IN_SEC = 30 * 60
+THIRTY_MINUTES_IN_SEC = 30 * 60
 TEN_MINUTES_IN_SEC = 10 * 60
 
 DEFAULT_EXAM_DURATION = TEN_MINUTES_IN_SEC
@@ -193,7 +193,7 @@ def remove_prefix(s, prefix):
     return s[len(prefix):] if s.startswith(prefix) else s
 
 #private function used by "fix_long_events_duration" to fix 
-def update_duration(row, stat_df, threshold):
+def fix_outlier_by_single_threshold(row, stat_df, threshold):
 
     time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
     if time_diff_sec > threshold:
@@ -206,7 +206,7 @@ def update_duration(row, stat_df, threshold):
 
 #private function used by "fix_long_events_duration" to fix
 #only updates the duration of the single events 
-def update_single_events_duration(row, stat_df, threshold):
+def fix_single_event_outlier_by_single_threshold(row, stat_df, threshold):
 
     time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
     is_single_event = row[ExcelColumnName.IS_SINGLE_EVENT.value]
@@ -217,6 +217,40 @@ def update_single_events_duration(row, stat_df, threshold):
         else:
             return stat_df.at[event_context, "50%"]
     return time_diff_sec
+
+def update_duration(row, left_threshold, right_threshold, left_outlier_replacement_val, right_outlier_replacement_val):
+    time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
+    event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
+    if time_diff_sec < left_threshold:
+        return left_outlier_replacement_val
+    if time_diff_sec > right_threshold:
+        return right_outlier_replacement_val
+    return time_diff_sec
+
+def update_duration_by_interquartile_range(row, stat_df):
+
+    time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
+    event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
+    interquartile_range = stat_df.at[event_context, "75%"] - stat_df.at[event_context, "25%"] 
+    left_threshold = -1.5 * interquartile_range
+    right_threshold = 1.5 * interquartile_range
+    return update_duration(row, left_threshold = left_threshold, 
+                                right_threshold = right_threshold, 
+                                left_outlier_replacement_val = left_threshold,
+                                right_outlier_replacement_val= right_threshold)
+
+def update_single_events_duration_by_interquartile_range(row, stat_df):
+    is_single_event = row[ExcelColumnName.IS_SINGLE_EVENT.value]
+    if is_single_event:
+        return update_duration_by_interquartile_range(row, stat_df)
+    else:
+        return row[ExcelColumnName.TIME_DIFF_SEC.value]
+
+def update_duration_by_modified_z_score(row, stat_df):
+    
+    time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
+    event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
+
 
 def mark_single_events(input_file_path, output_file_path):
     
@@ -244,7 +278,7 @@ def mark_single_events(input_file_path, output_file_path):
 #param by: 
 #param all_events: true -> update all events, false -> update only single events and the last events of each student
 #
-def fix_long_events_duration(input_file_path, output_file_path, stat_file_path, by, all_events):
+def fix_outliers(input_file_path, output_file_path, stat_file_path, by, all_events):
 
     print("Task: fix long events' duration started..")
     df = pd.read_csv(input_file_path)
@@ -253,18 +287,23 @@ def fix_long_events_duration(input_file_path, output_file_path, stat_file_path, 
 
     if by == ThresholdType.TEN_MINUTES:
         if all_events:
-            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration(row, stat_df, threshold=TEN_MINUTES_IN_SEC), axis = 1)
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : fix_outlier_by_single_threshold(row, stat_df, threshold=TEN_MINUTES_IN_SEC), axis = 1)
         else:
-            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_single_events_duration(row, stat_df, threshold=TEN_MINUTES_IN_SEC), axis = 1)
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : fix_single_event_outlier_by_single_threshold(row, stat_df, threshold=TEN_MINUTES_IN_SEC), axis = 1)
     elif by == ThresholdType.THIRTY_MINUTES:
         if all_events:
-            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration(row, stat_df, threshold=THIRTY_MINUTES_IN_SEC), axis = 1)
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : fix_outlier_by_single_threshold(row, stat_df, threshold=THIRTY_MINUTES_IN_SEC), axis = 1)
         else:
-            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_single_events_duration(row, stat_df, threshold=THIRTY_MINUTES_IN_SEC), axis = 1)
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : fix_single_event_outlier_by_single_threshold(row, stat_df, threshold=THIRTY_MINUTES_IN_SEC), axis = 1)
 
     elif by == ThresholdType.INTERQUARTILE_RANGE:
-        #df
-        print("lkdfj")
+        if all_events:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration_by_interquartile_range(row, stat_df), axis = 1)
+        else:
+            df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_single_events_duration_by_interquartile_range(row, stat_df), axis = 1)
+
+            
+        
     else:
         #df
         print("ldjf")
@@ -436,7 +475,16 @@ if __name__ == "__main__":
     zero_duration_event_deleted_file_name = "4_zero_duration_event_deleted.csv"
     statistics_output_file_name = '5_statistics.csv'
     marked_single_events_file_name = "6a_marked_singled_events.csv"
-    long_events_duration_fixed_output_file_name = '6_long_events_duration_fixed.csv'
+    
+    outlier_fixed_by_10_min_all_event_output_file_name = '6a_outlier_fixed_by_10min_threshold_all_event.csv'
+    outlier_fixed_by_10_min_single_only_output_file_name = '6b_outlier_fixed_by_10min_threshold_single_only.csv'
+    outlier_fixed_by_30_min_all_event_output_file_name = '6c_outlier_fixed_by_30min_threshold_all_event.csv'
+    outlier_fixed_by_30_min_single_only_output_file_name = '6d_outlier_fixed_by_30min_threshold_single_only.csv'
+    outlier_fixed_by_iqr_all_event_output_file_name = '6e_outlier_fixed_by_iqr_all_event.csv'
+    outlier_fixed_by_iqr_single_only_output_file_name = '6f_outlier_fixed_by_iqr_single_only.csv'
+    outlier_fixed_by_modz_all_event_output_file_name = '6g_outlier_fixed_by_mod_z_score_all_event.csv'
+    outlier_fixed_by_modz_single_only_output_file_name = '6h_outlier_fixed_by_mod_z_score_single_only.csv'
+    
     aggregated_events_output_file_name = "7_aggregated_events.csv"
     single_quiz_events_deleted_file_name = "8_single_quiz_events_deleted.csv"
     duplicate_quiz_events_deleted_file_name = "9_duplicate_quiz_events_deleted.csv"
@@ -450,7 +498,45 @@ if __name__ == "__main__":
     #delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
     #generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
     #mark_single_events(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name))
-    fix_long_events_duration(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), ThresholdType.TEN_MINUTES, all_events = False)
+   
+    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_all_event_output_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+                            ThresholdType.TEN_MINUTES, 
+                            all_events = True)
+
+    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_single_only_output_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+                            ThresholdType.TEN_MINUTES, 
+                            all_events = False)
+
+    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_all_event_output_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+                            ThresholdType.THIRTY_MINUTES, 
+                            all_events = True)
+
+    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_single_only_output_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+                            ThresholdType.THIRTY_MINUTES, 
+                            all_events = False)
+
+    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_all_event_output_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+                            ThresholdType.INTERQUARTILE_RANGE, 
+                            all_events = True)
+
+    fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_single_only_output_file_name), 
+                            os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name), 
+                            ThresholdType.INTERQUARTILE_RANGE, 
+                            all_events = False)
+
+    
+    
     #aggregate_events(os.path.join(OUTPUT_FILE_DIR, long_events_duration_fixed_output_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name))
     #delete_single_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name), os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name))
     #delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
