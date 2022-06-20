@@ -28,7 +28,7 @@ class ThresholdType(enum.Enum):
     INTERQUARTILE_RANGE = 10
     MODIFIED_Z_SCORE = 15 
 
-DATE_TIME_FORMAT = '%m/%d/%y %H:%M:%S'
+DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 FILE_DIR = r'F:\E\code\student-data-project\resources'
 OUTPUT_FILE_DIR = FILE_DIR
 FILE_NAME = 'test.xlsx'
@@ -78,16 +78,23 @@ def sec_to_hh_mm_ss(sec):
         return sec
     return str(datetime.timedelta(seconds=sec))
 
+def delete_invalid_users(input_file_path, input_sheet_name, output_file_path):
+
+    df = pd.read_excel(input_file_path, sheet_name = input_sheet_name)
+    df[ExcelColumnName.EVENT_CONTEXT.value] = df[ExcelColumnName.EVENT_CONTEXT.value].str.lower() #change all event name to lower case
+    invalid_users = ["A", "B", "C", "D", "E", "9"]
+    df = df[~df["User full name"].isin(invalid_users)]
+    write_df_to_csv(file_path = os.path.join(OUTPUT_FILE_DIR, output_file_path), df = df)
+
+#change all event name to lower case
 #for each event, compute it's duration (end_time-start_time)
 #add a new column to represent Event_duration in HH:MM:SS
-def compute_event_duration(file_path, input_sheet_name, output_file_path):
+def compute_event_duration(input_file_path, input_sheet_name, output_file_path):
 
-    df = pd.read_excel(file_path, sheet_name = input_sheet_name)
+    df = pd.read_csv(input_file_path)
     
     df[ExcelColumnName.EVENT_CONTEXT.value] = df[ExcelColumnName.EVENT_CONTEXT.value].str.lower() #change all event name to lower case
-
-    #remove user A, B, C,D, E, 9
-    df = df[~df["User full name"].isin(["A", "B", "C", "D", "E", "9"])]
+    df[ExcelColumnName.DATE_TIME.value] = df[ExcelColumnName.DATE_TIME.value].astype('str')
     
     df.reset_index(drop = True, inplace = True)
 
@@ -95,18 +102,16 @@ def compute_event_duration(file_path, input_sheet_name, output_file_path):
 
     print("Task: compute event duration started..")
 
-    end_time_index = None
+    end_time_index = 0
     start_time_index = None
     computed_row_list = []
-    #the first entry(last event) in the spreadsheet will be deleted. since we don't know it's endtime.
-    print(df.head())
+    #for the first event the duration will be 0. (We don't know it's end time.)
     try:
         for index in df.index:
             if index % 10000 == 0:
                 print("%r record processed.." % index)
             start_time_index = index
-            if end_time_index != None:
-                compute_diff_time_sec_new(df, start_time_index, end_time_index, computed_row_list)
+            compute_diff_time_sec_new(df, start_time_index, end_time_index, computed_row_list)
             end_time_index = start_time_index
     except Exception as e:
         print("error!! start_index = %r end_index = %r" % (start_time_index, end_time_index))
@@ -524,6 +529,7 @@ def check_single_events(input_file_path):
 
 if __name__ == "__main__":
 
+    deleted_invalid_users_output_file_name = "0_invalid_users_deleted.csv"
     event_duration_output_file_name = '1_event_duration.csv'
     students_last_event_deleted_file_name = '2_students_last_event_deleted.csv'
     negative_time_fixed_file_name = "3_negative_time_fixed.csv"
@@ -545,9 +551,12 @@ if __name__ == "__main__":
     duplicate_quiz_events_deleted_file_name = "9_duplicate_quiz_events_deleted.csv"
     aggregated_events_statistics_file_name = "10_aggregated_events_statistics.csv"
     
+    
     #check_single_events(os.path.join(OUTPUT_FILE_DIR, '4_zero_duration_event_deleted.csv'))
-
-    #compute_event_duration(FILE_PATH, input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
+    # delete_invalid_users(FILE_PATH, input_sheet_name='Sheet1', 
+    #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name))
+    compute_event_duration(os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name),
+                        input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
     #delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
     #fix_negative_time(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
     #delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
