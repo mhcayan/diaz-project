@@ -123,13 +123,12 @@ def compute_event_duration(input_file_path, input_sheet_name, output_file_path):
     print("Task: compute event duration finished..")
     print("\n----------------------------------------\n")
 
-#drop the first row(last event) of each students data. (Except the first row in the excel)
+#drop the first row(last event) of each students data.
 def delete_students_last_event(input_file_path, output_file_path):
     df = pd.read_csv(input_file_path)
     print("Task: delete students last event started..")
     df[ExcelColumnName.USER_FULL_NAME.value] = df[ExcelColumnName.USER_FULL_NAME.value].astype(str)
-    df.drop(df[(df[ExcelColumnName.USER_FULL_NAME.value] != df[ExcelColumnName.USER_FULL_NAME.value].shift(1)) & \
-        (df[ExcelColumnName.USER_FULL_NAME.value].shift(1).apply(lambda x : isinstance(x,str)))].index, inplace = True)
+    df.drop(df[df[ExcelColumnName.USER_FULL_NAME.value] != df[ExcelColumnName.USER_FULL_NAME.value].shift(1)].index, inplace = True)
     write_df_to_csv(output_file_path, df)
     print("Task: delete students last event finished..")
     print("\n----------------------------------------\n")
@@ -555,9 +554,9 @@ if __name__ == "__main__":
     #check_single_events(os.path.join(OUTPUT_FILE_DIR, '4_zero_duration_event_deleted.csv'))
     # delete_invalid_users(FILE_PATH, input_sheet_name='Sheet1', 
     #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name))
-    compute_event_duration(os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name),
-                        input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
-    #delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
+    # compute_event_duration(os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name),
+    #                     input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
+    delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
     #fix_negative_time(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
     #delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
     #generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
