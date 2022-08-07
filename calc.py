@@ -14,7 +14,7 @@ class ExcelColumnName(enum.Enum):
     TIME_DIFF_HH_MM_SS = 'TIME DIFF HH:MM:SS'
     USER_FULL_NAME = 'User full name'
     EVENT_CONTEXT = 'Event Context'
-    IS_SINGLE_EVENT = 'is_single_event'
+    IS_LAST_EVENT = 'is_last_event'
     MAD = 'MAD'
     MEAN_AD = 'MeanAD'
 
@@ -210,10 +210,8 @@ def fix_outlier_by_single_threshold(row, stat_df, threshold):
     time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
     if time_diff_sec > threshold:
         event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
-        if event_context.startswith('quiz: exam') or event_context.startswith('quiz: final exam'):
-            return DEFAULT_EXAM_DURATION
-        else:
-            return stat_df.at[event_context, "50%"]
+        if not (event_context.startswith('quiz: exam') or event_context.startswith('quiz: final exam')):
+            return threshold
     return time_diff_sec
 
 #private function used by "fix_long_events_duration" to fix
@@ -301,26 +299,27 @@ def update_single_events_duration_by_modified_z_score(row, stat_df):
     else:
         return row[ExcelColumnName.TIME_DIFF_SEC.value]
 
-def mark_single_events(input_file_path, output_file_path):
+# add new new column in the name "is_last_event"
+# is_last_event = true, when an event is a single event or it's the last event in a series of same event
+def mark_last_events(input_file_path, output_file_path):
     
-    print("Task: mark single events started..")
+    print("Task: mark last events started..")
     df = pd.read_csv(input_file_path)
+    df[ExcelColumnName.IS_LAST_EVENT.value] = False
+    last_event = None
+    last_student = None
 
-    #mark single events
-    df[ExcelColumnName.IS_SINGLE_EVENT.value] = False
-    count = 0
     for index in df.index:
-        if index == 0:
-            count = 1
-        else:
-            if (df.at[index, ExcelColumnName.USER_FULL_NAME.value] != df.at[index - 1, ExcelColumnName.USER_FULL_NAME.value]) or (df.at[index, ExcelColumnName.EVENT_CONTEXT.value] != df.at[index - 1, ExcelColumnName.EVENT_CONTEXT.value]):
-                if count == 1:
-                    df.at[index - 1, ExcelColumnName.IS_SINGLE_EVENT.value] = True
-                count = 1
-            else:
-                count = count + 1
+
+        event = df.at[index, ExcelColumnName.EVENT_CONTEXT.value]
+        student = df.at[index, ExcelColumnName.USER_FULL_NAME.value]
+        if student != last_student or event != last_event:
+            df.at[index, ExcelColumnName.IS_LAST_EVENT.value] = True
+        last_event = event
+        last_student = student
+
     write_df_to_csv(output_file_path, df)
-    print("Task: mark single events started..")
+    print("Task: mark last events finished..")
 
 def compute_MAD(s):
     median_s = s.median()
@@ -541,7 +540,7 @@ if __name__ == "__main__":
     zero_duration_event_deleted_file_name = "4_zero_duration_event_deleted.csv"
     reset_last_quiz_events_duration_file_name = "5_reset_last_quiz_events_duration.csv"
     statistics_output_file_name = '6_statistics.csv'
-    marked_single_events_file_name = "6a_marked_singled_events.csv"
+    marked_single_events_file_name = "7_marked_singled_events.csv"
     
     outlier_fixed_by_10_min_all_event_output_file_name = '6a_outlier_fixed_by_10min_threshold_all_event.csv'
     outlier_fixed_by_10_min_single_only_output_file_name = '6b_outlier_fixed_by_10min_threshold_single_only.csv'
@@ -569,12 +568,12 @@ if __name__ == "__main__":
     #                     os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
     # delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), 
     #                     os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
-    reset_last_quiz_events_duration(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), 
-                        os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name))
-    
-    # generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), 
+    # reset_last_quiz_events_duration(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), 
+    #                     os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name))
+    # generate_statistics(os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name),
     #                     os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
-    # #mark_single_events(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name))
+    # mark_last_events(os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name), 
+    #                     os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name))
 
     # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
     #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_all_event_output_file_name), 
