@@ -58,9 +58,8 @@ def write_df_to_csv(file_path, df, index = False):
 def get_time_diff(df, start_time_index, end_time_index):
     start_time = df.at[start_time_index, ExcelColumnName.DATE_TIME.value] 
     end_time = df.at[end_time_index, ExcelColumnName.DATE_TIME.value]
-    if isinstance(start_time, str):
-        start_time = datetime.datetime.strptime(start_time, DATE_TIME_FORMAT)
-        end_time = datetime.datetime.strptime(end_time, DATE_TIME_FORMAT)
+    start_time = datetime.datetime.strptime(start_time, DATE_TIME_FORMAT)
+    end_time = datetime.datetime.strptime(end_time, DATE_TIME_FORMAT)
     return end_time - start_time
 
 #since: 3/9/2021
@@ -93,8 +92,7 @@ def compute_event_duration(input_file_path, input_sheet_name, output_file_path):
 
     df = pd.read_csv(input_file_path)
     
-    df[ExcelColumnName.EVENT_CONTEXT.value] = df[ExcelColumnName.EVENT_CONTEXT.value].str.lower() #change all event name to lower case
-    df[ExcelColumnName.DATE_TIME.value] = df[ExcelColumnName.DATE_TIME.value].astype('str')
+    #df[ExcelColumnName.DATE_TIME.value] = df[ExcelColumnName.DATE_TIME.value].astype('str')
     
     df.reset_index(drop = True, inplace = True)
 
@@ -124,6 +122,7 @@ def compute_event_duration(input_file_path, input_sheet_name, output_file_path):
     print("\n----------------------------------------\n")
 
 #drop the first row(last event) of each students data.
+#assumption: A students all records are in consecutive order (all in in one place in the spreadsheet).  
 def delete_students_last_event(input_file_path, output_file_path):
     df = pd.read_csv(input_file_path)
     print("Task: delete students last event started..")
@@ -138,11 +137,32 @@ def delete_zero_duration_event(input_file_path, output_file_path):
 
     print("Task: delete zero duration event started..")
     df = pd.read_csv(input_file_path)
-    print(len(df))
+    initial_length = len(df)
     df = df[df[ExcelColumnName.TIME_DIFF_SEC.value] != 0]
-    print(len(df))
+    print("%r records deleted.." % (initial_length - len(df)))
     write_df_to_csv(file_path = os.path.join(OUTPUT_FILE_DIR, output_file_path), df = df)
     print("Task: delete zero duration event finished..")
+    print("\n----------------------------------------\n")
+
+#events whose name startswith "quiz: exam" or "quiz: final exam", set its first occurance with 0 time in a series of events. (both for single and consecutive)
+def reset_last_quiz_events_duration(input_file_path, output_file_path):
+    print("Task: reset last quiz event's duration started..")
+    df = pd.read_csv(input_file_path)
+
+    lastStudent = None
+    lastEvent = None
+    for index in df.index:
+        student = df.at[index, ExcelColumnName.USER_FULL_NAME.value]
+        event = df.at[index, ExcelColumnName.EVENT_CONTEXT.value]
+        if event.startswith("quiz: exam") | event.startswith("quiz: final exam"):
+            if (student != lastStudent) | (event != lastEvent):
+                df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] = 0
+        lastStudent = student
+        lastEvent = event
+    
+    df[ExcelColumnName.TIME_DIFF_HH_MM_SS.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].map(sec_to_hh_mm_ss)
+    write_df_to_csv(file_path = os.path.join(OUTPUT_FILE_DIR, output_file_path), df = df)
+    print("Task: reset last quiz event's duration finished..")
     print("\n----------------------------------------\n")
 
 #for events which have negative time assume they were ended in the next year
@@ -152,23 +172,9 @@ def fix_negative_time(input_file_path, output_file_path):
     print("Task: fix negative time started..")
     
     df = pd.read_csv(input_file_path)
-    """
-    try:
-        for index in df.index:
-            if index > 0 and df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] < 0:
-                start_time = datetime.datetime.strptime(df.at[index, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
-                end_time = datetime.datetime.strptime(df.at[index - 1, ExcelColumnName.DATE_TIME.value], DATE_TIME_FORMAT)
-                end_time = end_time.replace(year = end_time.year + 1) #assume the event was ended in the next year (increment end year)
-                df.at[index, ExcelColumnName.TIME_DIFF_SEC.value] = int((end_time - start_time).total_seconds())
-    except:
-        print("index = %r start_time = %r end_time = %r\n" % (index, start_time, end_time))
-        raise
-
-    df[ExcelColumnName.TIME_DIFF_HH_MM_SS.value] = df[ExcelColumnName.TIME_DIFF_SEC.value].map(sec_to_hh_mm_ss)
-    """
-    print(len(df))
+    initial_length = len(df)
     df = df[df[ExcelColumnName.TIME_DIFF_SEC.value] >= 0]
-    print(len(df))
+    print("%r records deleted.." % (initial_length - len(df)))
     write_df_to_csv(output_file_path, df = df)
     print("Task: fix negative time finished..")
     print("\n----------------------------------------\n")
@@ -533,7 +539,8 @@ if __name__ == "__main__":
     students_last_event_deleted_file_name = '2_students_last_event_deleted.csv'
     negative_time_fixed_file_name = "3_negative_time_fixed.csv"
     zero_duration_event_deleted_file_name = "4_zero_duration_event_deleted.csv"
-    statistics_output_file_name = '5_statistics.csv'
+    reset_last_quiz_events_duration_file_name = "5_reset_last_quiz_events_duration.csv"
+    statistics_output_file_name = '6_statistics.csv'
     marked_single_events_file_name = "6a_marked_singled_events.csv"
     
     outlier_fixed_by_10_min_all_event_output_file_name = '6a_outlier_fixed_by_10min_threshold_all_event.csv'
@@ -556,11 +563,18 @@ if __name__ == "__main__":
     #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name))
     # compute_event_duration(os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name),
     #                     input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
-    delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
-    #fix_negative_time(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
-    #delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
-    #generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
-    #mark_single_events(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name))
+    # delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), 
+    #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
+    # fix_negative_time(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), 
+    #                     os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
+    # delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), 
+    #                     os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
+    reset_last_quiz_events_duration(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), 
+                        os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name))
+    
+    # generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), 
+    #                     os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
+    # #mark_single_events(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name))
 
     # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_single_events_file_name), 
     #                         os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_all_event_output_file_name), 
