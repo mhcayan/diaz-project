@@ -584,7 +584,7 @@ if __name__ == "__main__":
     outlier_fixed_by_modz_all_event_output_file_name = '7g_outlier_fixed_by_mod_z_score_all_event.csv'
     outlier_fixed_by_modz_last_only_output_file_name = '7h_outlier_fixed_by_mod_z_score_last_only.csv'
 
-    outlier_fixe_file_name_list = [    
+    outlier_fixed_file_name_list = [    
         outlier_fixed_by_10_min_all_event_output_file_name,
         outlier_fixed_by_10_min_last_only_output_file_name,
         outlier_fixed_by_30_min_all_event_output_file_name,
@@ -615,9 +615,67 @@ if __name__ == "__main__":
         aggregated_events_modz_last_only_output_file_name
     ]
     
-    single_quiz_events_deleted_file_name = "8_single_quiz_events_deleted.csv"
-    duplicate_quiz_events_deleted_file_name = "9_duplicate_quiz_events_deleted.csv"
-    aggregated_events_statistics_file_name = "10_aggregated_events_statistics.csv"
+    single_quiz_events_deleted_10_min_all_output_file_name = "9a_single_quiz_events_deleted_10_min_all.csv"
+    single_quiz_events_deleted_10_min_last_only_output_file_name = "9b_single_quiz_events_deleted_10_min_last_only.csv"
+    single_quiz_events_deleted_30_min_all_output_file_name = "9c_single_quiz_events_deleted_30_min_all.csv"
+    single_quiz_events_deleted_30_min_last_only_output_file_name = "9d_single_quiz_events_deleted_30_min_last_only.csv"
+    single_quiz_events_deleted_iqr_all_output_file_name = "9e_single_quiz_events_deleted_iqr_all.csv"
+    single_quiz_events_deleted_iqr_last_only_output_file_name = "9f_single_quiz_events_deleted_iqr_last_only.csv"
+    single_quiz_events_deleted_modz_all_output_file_name = "9g_single_quiz_events_deleted_modz_all.csv"
+    single_quiz_events_deleted_modz_last_only_output_file_name = "9h_single_quiz_events_deleted_modz_last_only.csv"
+
+    single_quiz_events_deleted_file_name_list = [
+        single_quiz_events_deleted_10_min_all_output_file_name,
+        single_quiz_events_deleted_10_min_last_only_output_file_name,
+        single_quiz_events_deleted_30_min_all_output_file_name,
+        single_quiz_events_deleted_30_min_last_only_output_file_name,
+        single_quiz_events_deleted_iqr_all_output_file_name,
+        single_quiz_events_deleted_iqr_last_only_output_file_name,
+        single_quiz_events_deleted_modz_all_output_file_name,
+        single_quiz_events_deleted_modz_last_only_output_file_name
+    ]
+
+    duplicate_quiz_events_deleted_10_min_all_output_file_name = "10a_duplicate_quiz_events_deleted_10_min_all.csv"
+    duplicate_quiz_events_deleted_10_min_last_only_output_file_name = "10b_duplicate_quiz_events_deleted_10_min_last_only.csv"
+    duplicate_quiz_events_deleted_30_min_all_output_file_name = "10c_duplicate_quiz_events_deleted_30_min_all.csv"
+    duplicate_quiz_events_deleted_30_min_last_only_output_file_name = "10d_duplicate_quiz_events_deleted_30_min_last_only.csv"
+    duplicate_quiz_events_deleted_iqr_all_output_file_name = "10e_duplicate_quiz_events_deleted_iqr_all.csv"
+    duplicate_quiz_events_deleted_iqr_last_only_output_file_name = "10f_duplicate_quiz_events_deleted_iqr_last_only.csv"
+    duplicate_quiz_events_deleted_modz_all_output_file_name = "10g_duplicate_quiz_events_deleted_modz_all.csv"
+    duplicate_quiz_events_deleted_modz_last_only_output_file_name = "10h_duplicate_quiz_events_deleted_modz_last_only.csv"
+    
+    duplicate_quiz_events_deleted_file_name_list = [
+        duplicate_quiz_events_deleted_10_min_all_output_file_name,
+        duplicate_quiz_events_deleted_10_min_last_only_output_file_name,
+        duplicate_quiz_events_deleted_30_min_all_output_file_name,
+        duplicate_quiz_events_deleted_30_min_last_only_output_file_name,
+        duplicate_quiz_events_deleted_iqr_all_output_file_name,
+        duplicate_quiz_events_deleted_iqr_last_only_output_file_name,
+        duplicate_quiz_events_deleted_modz_all_output_file_name,
+        duplicate_quiz_events_deleted_modz_last_only_output_file_name
+    ]
+
+
+    aggregated_events_statistics_10_min_all_output_file_name = "11a_aggregated_events_statistics_10_min_all.csv"
+    aggregated_events_statistics_10_min_last_only_output_file_name = "11b_aggregated_events_statistics_10_min_last_only.csv"
+    aggregated_events_statistics_30_min_all_output_file_name = "11c_aggregated_events_statistics_30_min_all.csv"
+    aggregated_events_statistics_30_min_last_only_output_file_name = "11d_aggregated_events_statistics_30_min_last_only.csv"
+    aggregated_events_statistics_iqr_all_output_file_name = "11e_aggregated_events_statistics_iqr_all.csv"
+    aggregated_events_statistics_iqr_last_only_output_file_name = "11f_aggregated_events_statistics_iqr_last_only.csv"
+    aggregated_events_statistics_modz_all_output_file_name = "11g_aggregated_events_statistics_modz_all.csv"
+    aggregated_events_statistics_modz_last_only_output_file_name = "11h_aggregated_events_statistics_modz_last_only.csv"
+
+
+    aggregated_events_statistics_file_name_list = [
+        aggregated_events_statistics_10_min_all_output_file_name,
+        aggregated_events_statistics_10_min_last_only_output_file_name,
+        aggregated_events_statistics_30_min_all_output_file_name,
+        aggregated_events_statistics_30_min_last_only_output_file_name,
+        aggregated_events_statistics_iqr_all_output_file_name,
+        aggregated_events_statistics_iqr_last_only_output_file_name,
+        aggregated_events_statistics_modz_all_output_file_name,
+        aggregated_events_statistics_modz_last_only_output_file_name
+    ]
     
     
     #check_single_events(os.path.join(OUTPUT_FILE_DIR, '4_zero_duration_event_deleted.csv'))
@@ -687,24 +745,23 @@ if __name__ == "__main__":
     #                         ThresholdType.MODIFIED_Z_SCORE, 
     #                         all_events = False)
 
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_all_event_output_file_name), 
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_10_min_all_output_file_name))
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_10_min_last_only_output_file_name), 
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_10_min_last_only_output_file_name))
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_all_event_output_file_name), 
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_30_min_all_output_file_name))
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_30_min_last_only_output_file_name), 
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_30_min_last_only_output_file_name))
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_all_event_output_file_name), 
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_iqr_all_output_file_name))
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_iqr_last_only_output_file_name), 
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_iqr_last_only_output_file_name))
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_modz_all_event_output_file_name), 
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_modz_all_output_file_name))
-    # aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_by_modz_last_only_output_file_name),
-    #                 os.path.join(OUTPUT_FILE_DIR, aggregated_events_modz_last_only_output_file_name))
+    # for (outlier_fixed_file_name, aggregated_events_file_name) in zip(outlier_fixed_file_name_list, aggregated_events_file_name_list):
+    #     aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_file_name),
+    #                     os.path.join(OUTPUT_FILE_DIR, aggregated_events_file_name))
+
+    import time
+    # for (aggregated_events_file_name, single_quiz_events_deleted_file_name) in zip(aggregated_events_file_name_list, single_quiz_events_deleted_file_name_list):
+    #     delete_single_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_file_name), 
+    #                             os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name))
+    #     time.sleep(60)
     
-    delete_single_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_output_file_name), os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name))
-    delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
-    #generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
+    # for (single_quiz_events_deleted_file_name, duplicate_quiz_events_deleted_file_name) in zip(single_quiz_events_deleted_file_name_list, duplicate_quiz_events_deleted_file_name_list):
+    #     delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name), 
+    #                                 os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
+    #     time.sleep(55)
+
+    for (duplicate_quiz_events_deleted_file_name, aggregated_events_statistics_file_name) in zip(duplicate_quiz_events_deleted_file_name_list, aggregated_events_statistics_file_name_list):
+        generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), 
+            os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
+        time.sleep(60)
 
