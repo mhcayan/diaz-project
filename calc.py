@@ -8,9 +8,11 @@ import numpy as np
 import os.path
 import enum
 from openpyxl import load_workbook
+import re
 
 class ExcelColumnName(enum.Enum):
-    DATE_TIME = 'Date/Time'
+
+    FORMATTED_TIME = "formatted_time"
     TIME_DIFF_SEC = 'TIME DIFF SEC'
     TIME_DIFF_HH_MM_SS = 'TIME DIFF HH:MM:SS'
     USER_FULL_NAME = 'User full name'
@@ -18,9 +20,13 @@ class ExcelColumnName(enum.Enum):
     IS_LAST_EVENT = 'is_last_event'
     MEDIAN_AD = 'MedianAD'
     MEAN_AD = 'MeanAD'
+    TIME = "Time"
+    SECTION = "Section"
 
 class ExcelColumnIndex(enum.Enum):
+    FORMATTED_TIME = 2
     TIME_DIFF_SEC = 4
+    TIME_DIFF_SEC_HH_MM_SS = 5
     EVENT_CONTEXT = 9
 
 class ThresholdType(enum.Enum):
@@ -29,7 +35,7 @@ class ThresholdType(enum.Enum):
     INTERQUARTILE_RANGE = 10
     MODIFIED_Z_SCORE = 15 
 
-DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+DEFAULT_DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 FILE_DIR = r'F:\E\code\student-data-project\resources'
 OUTPUT_FILE_DIR = FILE_DIR
 FILE_NAME = 'test.xlsx'
@@ -57,10 +63,10 @@ def write_df_to_csv(file_path, df, index = False):
 
 #since 3/12/2021
 def get_time_diff(df, start_time_index, end_time_index):
-    start_time = df.at[start_time_index, ExcelColumnName.DATE_TIME.value] 
-    end_time = df.at[end_time_index, ExcelColumnName.DATE_TIME.value]
-    start_time = datetime.datetime.strptime(start_time, DATE_TIME_FORMAT)
-    end_time = datetime.datetime.strptime(end_time, DATE_TIME_FORMAT)
+    start_time = df.at[start_time_index, ExcelColumnName.FORMATTED_TIME.value] 
+    end_time = df.at[end_time_index, ExcelColumnName.FORMATTED_TIME.value]
+    start_time = datetime.datetime.strptime(start_time, DEFAULT_DATE_TIME_FORMAT)
+    end_time = datetime.datetime.strptime(end_time, DEFAULT_DATE_TIME_FORMAT)
     return end_time - start_time
 
 #since: 3/9/2021
@@ -89,7 +95,7 @@ def delete_invalid_users(input_file_path, input_sheet_name, output_file_path):
 #change all event name to lower case
 #for each event, compute it's duration (end_time-start_time)
 #add a new column to represent Event_duration in HH:MM:SS
-def compute_event_duration(input_file_path, input_sheet_name, output_file_path):
+def compute_event_duration(input_file_path, output_file_path):
 
     df = pd.read_csv(input_file_path)
     
@@ -97,7 +103,8 @@ def compute_event_duration(input_file_path, input_sheet_name, output_file_path):
     
     df.reset_index(drop = True, inplace = True)
 
-    df.insert(5, ExcelColumnName.TIME_DIFF_HH_MM_SS.value, "") #add a new column to represent event duration in hh:mm:ss
+    df.insert(ExcelColumnIndex.TIME_DIFF_SEC.value, ExcelColumnName.TIME_DIFF_SEC.value, "") #add a new column to represent event duration in hh:mm:ss
+    df.insert(ExcelColumnIndex.TIME_DIFF_SEC_HH_MM_SS.value, ExcelColumnName.TIME_DIFF_HH_MM_SS.value, "") #add a new column to represent event duration in hh:mm:ss
 
     print("Task: compute event duration started..")
 
@@ -563,9 +570,51 @@ def check_single_events(input_file_path):
             if event_count < 2:
                 print("%r %r\n" % (user_name, event_name))
 
+TIME_PATTERN = [
+    r"^\d+:\d+\s[AP]M,[A-Z][a-z]{2}\s\d+$",
+    r"^\d+/\d+/\d+\s\d+:\d+:\d+$",
+    r"^\d+:\d+/\d+$"
+]
+
+DATE_TIME_FORMAT = [
+    r"%I:%M %p,%b %d",
+    r"%m/%d/%y %H:%M:%S",
+    r"%H:%M%m/%d"
+]
+
+#convert given tm string to datetime
+def fix(section, tm):
+    year, semester = section.split()
+    year = int(year)
+    if re.match(TIME_PATTERN[0], tm):
+        date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[0])
+    elif re.match(TIME_PATTERN[1], tm):
+        date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[1])
+    elif re.match(TIME_PATTERN[2], tm):
+        date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[2])
+    else:
+        raise Exception("Invalid date time " + tm)
+    
+    if semester == "FF" and date_time.month < 7:
+        year = year + 1
+
+    date_time = date_time.replace(year = year)
+    return date_time
+        
+
+    
+    
+#convert all time to a uniform format. add a new column for that format.
+def fix_time_format(input_file, output_file):
+    df = pd.read_excel(input_file)
+    tm = df.apply(lambda row : fix(row[ExcelColumnName.SECTION.value], row[ExcelColumnName.TIME.value]), axis = 1)
+    df.insert(ExcelColumnIndex.FORMATTED_TIME.value, ExcelColumnName.FORMATTED_TIME.value, tm)
+    write_df_to_csv(output_file, df)
+
 
 if __name__ == "__main__":
 
+    formatted_time_output_file_name = "formatted_time.csv"
     deleted_invalid_users_output_file_name = "0_invalid_users_deleted.csv"
     event_duration_output_file_name = '1_event_duration.csv'
     students_last_event_deleted_file_name = '2_students_last_event_deleted.csv'
@@ -677,12 +726,13 @@ if __name__ == "__main__":
         aggregated_events_statistics_modz_last_only_output_file_name
     ]
     
-    
+    # fix_time_format(os.path.join(OUTPUT_FILE_DIR, "Sampledatetime.xlsx"), 
+    #                     os.path.join(OUTPUT_FILE_DIR, formatted_time_output_file_name))
     #check_single_events(os.path.join(OUTPUT_FILE_DIR, '4_zero_duration_event_deleted.csv'))
     # delete_invalid_users(FILE_PATH, input_sheet_name='Sheet1', 
     #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name))
-    # compute_event_duration(os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name),
-    #                     input_sheet_name='Sheet1', output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
+    # compute_event_duration(os.path.join(OUTPUT_FILE_DIR, formatted_time_output_file_name),
+    #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
     # delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), 
     #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
     # fix_negative_time(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), 
@@ -760,8 +810,8 @@ if __name__ == "__main__":
     #                                 os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
     #     time.sleep(55)
 
-    for (duplicate_quiz_events_deleted_file_name, aggregated_events_statistics_file_name) in zip(duplicate_quiz_events_deleted_file_name_list, aggregated_events_statistics_file_name_list):
-        generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), 
-            os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
-        time.sleep(60)
+    # for (duplicate_quiz_events_deleted_file_name, aggregated_events_statistics_file_name) in zip(duplicate_quiz_events_deleted_file_name_list, aggregated_events_statistics_file_name_list):
+    #     generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), 
+    #         os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
+    #     time.sleep(60)
 
