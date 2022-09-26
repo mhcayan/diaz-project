@@ -16,7 +16,7 @@ class ExcelColumnName(enum.Enum):
     TIME_DIFF_SEC = 'TIME DIFF SEC'
     TIME_DIFF_HH_MM_SS = 'TIME DIFF HH:MM:SS'
     USER_FULL_NAME = 'User full name'
-    EVENT_CONTEXT = 'Event Context'
+    EVENT_CONTEXT = 'Event context'
     IS_LAST_EVENT = 'is_last_event'
     MEDIAN_AD = 'MedianAD'
     MEAN_AD = 'MeanAD'
@@ -36,9 +36,9 @@ class ThresholdType(enum.Enum):
     MODIFIED_Z_SCORE = 15 
 
 DEFAULT_DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
-FILE_DIR = r'F:\E\code\student-data-project\resources'
+FILE_DIR = r'C:\Users\coeas\Desktop\resources\2022-9-26'
 OUTPUT_FILE_DIR = FILE_DIR
-FILE_NAME = 'test.xlsx'
+FILE_NAME = 'CORRECTED ROSTER.xlsx'
 FILE_PATH = os.path.join(FILE_DIR, FILE_NAME)
 
 THIRTY_MINUTES_IN_SEC = 30 * 60
@@ -84,12 +84,10 @@ def sec_to_hh_mm_ss(sec):
         return sec
     return str(datetime.timedelta(seconds=sec))
 
-def delete_invalid_users(input_file_path, input_sheet_name, output_file_path):
+def delete_invalid_users(input_file_path, output_file_path):
 
-    df = pd.read_excel(input_file_path, sheet_name = input_sheet_name)
+    df = pd.read_csv(input_file_path)
     df[ExcelColumnName.EVENT_CONTEXT.value] = df[ExcelColumnName.EVENT_CONTEXT.value].str.lower() #change all event name to lower case
-    invalid_users = ["A", "B", "C", "D", "E", "9"]
-    df = df[~df["User full name"].isin(invalid_users)]
     write_df_to_csv(file_path = os.path.join(OUTPUT_FILE_DIR, output_file_path), df = df)
 
 #change all event name to lower case
@@ -577,28 +575,36 @@ TIME_PATTERN = [
 ]
 
 DATE_TIME_FORMAT = [
-    r"%I:%M %p,%b %d",
+    r"%Y:%I:%M %p,%b %d",
     r"%m/%d/%y %H:%M:%S",
-    r"%H:%M%m/%d"
+    r"%H:%M%m/%d/%Y"
 ]
 
 #convert given tm string to datetime
 def fix(section, tm):
-    year, semester = section.split()
-    year = int(year)
-    if re.match(TIME_PATTERN[0], tm):
-        date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[0])
-    elif re.match(TIME_PATTERN[1], tm):
-        date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[1])
-    elif re.match(TIME_PATTERN[2], tm):
-        date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[2])
-    else:
-        raise Exception("Invalid date time " + tm)
-    
-    if semester == "FF" and date_time.month < 7:
-        year = year + 1
+    try:
+        year, semester = section.split()
+        year = int(year)
+        if re.match(TIME_PATTERN[0], tm):
+            tm = "2016:" + tm
+            date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[0])
+        elif re.match(TIME_PATTERN[1], tm):
+            date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[1])
+        elif re.match(TIME_PATTERN[2], tm):
+            tm = tm + "/2016"
+            date_time = datetime.datetime.strptime(tm, DATE_TIME_FORMAT[2])
+        else:
+            raise Exception("Invalid date time " + tm)
+        
+        if semester == "FF" and date_time.month < 7:
+            year = year + 1
 
-    date_time = date_time.replace(year = year)
+        date_time = date_time.replace(year = year)
+    except Exception as e:
+        print(e)
+        print(tm)
+        print(section)
+        raise Exception("Date error")
     return date_time
         
 
@@ -619,8 +625,8 @@ if __name__ == "__main__":
     event_duration_output_file_name = '1_event_duration.csv'
     students_last_event_deleted_file_name = '2_students_last_event_deleted.csv'
     negative_time_fixed_file_name = "3_negative_time_fixed.csv"
-    zero_duration_event_deleted_file_name = "4_zero_duration_event_deleted.csv"
-    reset_last_quiz_events_duration_file_name = "5_reset_last_quiz_events_duration.csv"
+    reset_last_quiz_events_duration_file_name = "4_reset_last_quiz_events_duration.csv"
+    zero_duration_event_deleted_file_name = "5_zero_duration_event_deleted.csv"
     statistics_output_file_name = '6_statistics.csv'
     marked_last_events_file_name = "7_marked_last_events.csv"
     
@@ -726,24 +732,24 @@ if __name__ == "__main__":
         aggregated_events_statistics_modz_last_only_output_file_name
     ]
     
-    # fix_time_format(os.path.join(OUTPUT_FILE_DIR, "Sampledatetime.xlsx"), 
+    # fix_time_format(FILE_PATH, 
     #                     os.path.join(OUTPUT_FILE_DIR, formatted_time_output_file_name))
     #check_single_events(os.path.join(OUTPUT_FILE_DIR, '4_zero_duration_event_deleted.csv'))
-    # delete_invalid_users(FILE_PATH, input_sheet_name='Sheet1', 
+    # delete_invalid_users(os.path.join(OUTPUT_FILE_DIR, formatted_time_output_file_name),
     #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name))
-    # compute_event_duration(os.path.join(OUTPUT_FILE_DIR, formatted_time_output_file_name),
+    # compute_event_duration(os.path.join(OUTPUT_FILE_DIR, deleted_invalid_users_output_file_name),
     #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name))
     # delete_students_last_event(os.path.join(OUTPUT_FILE_DIR, event_duration_output_file_name), 
     #                     output_file_path = os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name))
     # fix_negative_time(os.path.join(OUTPUT_FILE_DIR, students_last_event_deleted_file_name), 
     #                     os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name))
-    # delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), 
-    #                     os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
-    # reset_last_quiz_events_duration(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), 
+    # reset_last_quiz_events_duration(os.path.join(OUTPUT_FILE_DIR, negative_time_fixed_file_name), 
     #                     os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name))
-    # generate_statistics(os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name),
+    # delete_zero_duration_event(os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name), 
+    #                     os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name))
+    # generate_statistics(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name),
     #                     os.path.join(OUTPUT_FILE_DIR, statistics_output_file_name))
-    # mark_last_events(os.path.join(OUTPUT_FILE_DIR, reset_last_quiz_events_duration_file_name), 
+    # mark_last_events(os.path.join(OUTPUT_FILE_DIR, zero_duration_event_deleted_file_name), 
     #                     os.path.join(OUTPUT_FILE_DIR, marked_last_events_file_name))
 
     # fix_outliers(os.path.join(OUTPUT_FILE_DIR, marked_last_events_file_name), 
@@ -800,18 +806,19 @@ if __name__ == "__main__":
     #                     os.path.join(OUTPUT_FILE_DIR, aggregated_events_file_name))
 
     import time
+    #not needed
     # for (aggregated_events_file_name, single_quiz_events_deleted_file_name) in zip(aggregated_events_file_name_list, single_quiz_events_deleted_file_name_list):
     #     delete_single_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_file_name), 
     #                             os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name))
     #     time.sleep(60)
     
-    # for (single_quiz_events_deleted_file_name, duplicate_quiz_events_deleted_file_name) in zip(single_quiz_events_deleted_file_name_list, duplicate_quiz_events_deleted_file_name_list):
-    #     delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, single_quiz_events_deleted_file_name), 
+    # for (aggregated_events_file_name, duplicate_quiz_events_deleted_file_name) in zip(aggregated_events_file_name_list, duplicate_quiz_events_deleted_file_name_list):
+    #     delete_duplicate_quiz_events(os.path.join(OUTPUT_FILE_DIR, aggregated_events_file_name), 
     #                                 os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
     #     time.sleep(55)
 
-    # for (duplicate_quiz_events_deleted_file_name, aggregated_events_statistics_file_name) in zip(duplicate_quiz_events_deleted_file_name_list, aggregated_events_statistics_file_name_list):
-    #     generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), 
-    #         os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
-    #     time.sleep(60)
+    for (duplicate_quiz_events_deleted_file_name, aggregated_events_statistics_file_name) in zip(duplicate_quiz_events_deleted_file_name_list, aggregated_events_statistics_file_name_list):
+        generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), 
+            os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
+        time.sleep(60)
 
