@@ -267,8 +267,8 @@ def update_duration_by_interquartile_range(row, stat_df):
         return row[ExcelColumnName.TIME_DIFF_SEC.value]
 
     interquartile_range = stat_df.at[event_context, "75%"] - stat_df.at[event_context, "25%"] 
-    left_threshold = -1.5 * interquartile_range
-    right_threshold = 1.5 * interquartile_range
+    left_threshold = stat_df.at[event_context, "25%"] - 1.5 * interquartile_range 
+    right_threshold = stat_df.at[event_context, "75%"] + 1.5 * interquartile_range
     time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
     return update_duration(
                 value = time_diff_sec, 
