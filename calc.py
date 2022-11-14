@@ -16,12 +16,21 @@ class ExcelColumnName(enum.Enum):
     TIME_DIFF_SEC = 'TIME DIFF SEC'
     TIME_DIFF_HH_MM_SS = 'TIME DIFF HH:MM:SS'
     USER_FULL_NAME = 'User full name'
-    EVENT_CONTEXT = 'Event context'
+    EVENT_CONTEXT = 'Event Context'
     IS_LAST_EVENT = 'is_last_event'
     MEDIAN_AD = 'MedianAD'
     MEAN_AD = 'MeanAD'
     TIME = "Time"
     SECTION = "Section"
+    LEFT_THRESHOLD = "left_threshold"
+    RIGHT_THRESHOLD = "right_threshold"
+    OLD_TIME_DIFF_SEC = "old_TIME_DIFF_SEC"
+    OLD_MODIFIED_Z_SCORE = "old_modified_zscore"
+
+REDUNDANT_COLUMNS = [ExcelColumnName.OLD_TIME_DIFF_SEC.value, 
+                        ExcelColumnName.OLD_MODIFIED_Z_SCORE.value, 
+                        ExcelColumnName.LEFT_THRESHOLD.value, 
+                        ExcelColumnName.RIGHT_THRESHOLD.value]
 
 class ExcelColumnIndex(enum.Enum):
     FORMATTED_TIME = 2
@@ -36,7 +45,7 @@ class ThresholdType(enum.Enum):
     MODIFIED_Z_SCORE = 15 
 
 DEFAULT_DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
-FILE_DIR = r'C:\Users\coeas\Desktop\resources\2022-9-26'
+FILE_DIR = r'F:\E\code\student-data-project\resources'
 OUTPUT_FILE_DIR = FILE_DIR
 FILE_NAME = 'CORRECTED ROSTER.xlsx'
 FILE_PATH = os.path.join(FILE_DIR, FILE_NAME)
@@ -260,6 +269,44 @@ def update_duration(value, default_value, left_threshold, right_threshold, left_
 def is_exam(event_context):
     return event_context.startswith("quiz: exam") or event_context.startswith("quiz: final exam")
 
+def get_iqr_threshold_value(row, stat_df):
+    event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
+    interquartile_range = stat_df.at[event_context, "75%"] - stat_df.at[event_context, "25%"] 
+    left_threshold = stat_df.at[event_context, "25%"] - 1.5 * interquartile_range 
+    right_threshold = stat_df.at[event_context, "75%"] + 1.5 * interquartile_range
+    return pd.Series((left_threshold, right_threshold))
+
+def get_modified_zscore_threshold_value(row, stat_df):
+    
+    time_diff_sec = row[ExcelColumnName.TIME_DIFF_SEC.value]
+    event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
+
+    medianAD = stat_df.at[event_context, ExcelColumnName.MEDIAN_AD.value]
+    meanAD = stat_df.at[event_context, ExcelColumnName.MEAN_AD.value]
+
+    #talk:
+    #redundant check: if meanAD is 0, medianAD should be also 0
+    if medianAD == 0 and meanAD == 0:
+        return pd.Series((None, None, None))
+
+    median = stat_df.at[event_context, '50%']
+    left_threshold_z_score = -3.5
+    right_threshold_z_score = 3.5
+    
+    #https://www.ibm.com/docs/en/cognos-analytics/11.1.0?topic=terms-modified-z-score
+    if medianAD == 0:
+        CONSTANT_FACTOR = 1.253314
+        modified_z_score = (time_diff_sec-median) / (CONSTANT_FACTOR * meanAD)
+        left_threshold = left_threshold_z_score * CONSTANT_FACTOR * meanAD + median
+        right_threshold = right_threshold_z_score * CONSTANT_FACTOR * meanAD + median
+    else:
+        CONSTANT_FACTOR = 1.486
+        modified_z_score = (time_diff_sec-median)/(CONSTANT_FACTOR * medianAD)
+        left_threshold = left_threshold_z_score * CONSTANT_FACTOR * medianAD + median
+        right_threshold = right_threshold_z_score * CONSTANT_FACTOR * medianAD + median
+    return pd.Series((modified_z_score, left_threshold, right_threshold))
+
+
 def update_duration_by_interquartile_range(row, stat_df):
 
     event_context = row[ExcelColumnName.EVENT_CONTEXT.value]
@@ -392,6 +439,17 @@ def fix_outliers(input_file_path, output_file_path, stat_file_path, by, all_even
             df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : fix_last_event_outlier_by_single_threshold(row, stat_df, threshold=THIRTY_MINUTES_IN_SEC), axis = 1)
 
     elif by == ThresholdType.INTERQUARTILE_RANGE:
+        #the threshold column will be inserted before time_diff_sec column
+        time_diff_sec_index = list(df.columns).index(ExcelColumnName.TIME_DIFF_SEC.value)
+        df.insert(time_diff_sec_index, ExcelColumnName.RIGHT_THRESHOLD.value, 0)
+        df.insert(time_diff_sec_index, ExcelColumnName.LEFT_THRESHOLD.value, 0)
+        df.insert(time_diff_sec_index, ExcelColumnName.OLD_TIME_DIFF_SEC.value, 0)
+        
+        
+        df[ExcelColumnName.OLD_TIME_DIFF_SEC.value] = df[ExcelColumnName.TIME_DIFF_SEC.value]
+        df[[ExcelColumnName.LEFT_THRESHOLD.value, ExcelColumnName.RIGHT_THRESHOLD.value]] = df.apply(lambda row : 
+                get_iqr_threshold_value(row, stat_df), axis = 1)
+        
         if all_events:
             df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration_by_interquartile_range(row, stat_df), axis = 1)
         else:
@@ -402,6 +460,18 @@ def fix_outliers(input_file_path, output_file_path, stat_file_path, by, all_even
         stat_df[ExcelColumnName.MEDIAN_AD.value] = stat_df.apply(lambda row : compute_MedianAD(df[df[ExcelColumnName.EVENT_CONTEXT.value] == row.name][ExcelColumnName.TIME_DIFF_SEC.value]), axis = 1)
         stat_df[ExcelColumnName.MEAN_AD.value] = stat_df.apply(lambda row : compute_MeanAD(df[df[ExcelColumnName.EVENT_CONTEXT.value] == row.name][ExcelColumnName.TIME_DIFF_SEC.value]), axis = 1)
         write_df_to_csv(os.path.join(OUTPUT_FILE_DIR, 'updated_stat_df.csv'), stat_df)
+        
+        #the threshold column will be inserted before time_diff_sec column
+        time_diff_sec_index = list(df.columns).index(ExcelColumnName.TIME_DIFF_SEC.value)
+        df.insert(time_diff_sec_index, ExcelColumnName.RIGHT_THRESHOLD.value, 0)
+        df.insert(time_diff_sec_index, ExcelColumnName.LEFT_THRESHOLD.value, 0)
+        df.insert(time_diff_sec_index, ExcelColumnName.OLD_MODIFIED_Z_SCORE.value, 0)
+        df.insert(time_diff_sec_index, ExcelColumnName.OLD_TIME_DIFF_SEC.value, 0)
+        
+        df[ExcelColumnName.OLD_TIME_DIFF_SEC.value] = df[ExcelColumnName.TIME_DIFF_SEC.value]
+
+        df[[ExcelColumnName.OLD_MODIFIED_Z_SCORE.value, ExcelColumnName.LEFT_THRESHOLD.value, ExcelColumnName.RIGHT_THRESHOLD.value]] = df.apply(lambda row : 
+                get_modified_zscore_threshold_value(row, stat_df), axis = 1)
         if all_events:
             df[ExcelColumnName.TIME_DIFF_SEC.value] = df.apply(lambda row : update_duration_by_modified_z_score(row, stat_df), axis = 1)
         else:
@@ -419,6 +489,9 @@ def fix_outliers(input_file_path, output_file_path, stat_file_path, by, all_even
 def aggregate_events(input_file_path, output_file_path):
     print("Task: aggregate events started..")
     df = pd.read_csv(input_file_path)
+    columns_to_del = [ column for column in REDUNDANT_COLUMNS if column in df]
+    df.drop(columns=columns_to_del, inplace=True)
+
     computed_row_list = []
     cumulative_duration = 0
     event_count = 0
@@ -801,9 +874,9 @@ if __name__ == "__main__":
     #                         ThresholdType.MODIFIED_Z_SCORE, 
     #                         all_events = False)
 
-    # for (outlier_fixed_file_name, aggregated_events_file_name) in zip(outlier_fixed_file_name_list, aggregated_events_file_name_list):
-    #     aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_file_name),
-    #                     os.path.join(OUTPUT_FILE_DIR, aggregated_events_file_name))
+    for (outlier_fixed_file_name, aggregated_events_file_name) in zip(outlier_fixed_file_name_list, aggregated_events_file_name_list):
+        aggregate_events(os.path.join(OUTPUT_FILE_DIR, outlier_fixed_file_name),
+                        os.path.join(OUTPUT_FILE_DIR, aggregated_events_file_name))
 
     import time
     #not needed
@@ -817,8 +890,8 @@ if __name__ == "__main__":
     #                                 os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name))
     #     time.sleep(55)
 
-    for (duplicate_quiz_events_deleted_file_name, aggregated_events_statistics_file_name) in zip(duplicate_quiz_events_deleted_file_name_list, aggregated_events_statistics_file_name_list):
-        generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), 
-            os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
-        time.sleep(60)
+    # for (duplicate_quiz_events_deleted_file_name, aggregated_events_statistics_file_name) in zip(duplicate_quiz_events_deleted_file_name_list, aggregated_events_statistics_file_name_list):
+    #     generate_statistics(os.path.join(OUTPUT_FILE_DIR, duplicate_quiz_events_deleted_file_name), 
+    #         os.path.join(OUTPUT_FILE_DIR, aggregated_events_statistics_file_name), remove_event_prefix = True)
+        # time.sleep(60)
 
